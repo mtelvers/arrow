@@ -1,0 +1,7 @@
+(test
+ (name test_arrow)
+ (libraries arrow2))
+
+(test
+ (name test_performance) 
+ (libraries arrow2))

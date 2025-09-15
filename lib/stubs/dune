@@ -1,0 +1,29 @@
+(library
+ (name bindings)
+ (modules bindings)
+ (libraries ctypes ctypes.stubs))
+
+(executable
+ (public_name gen)
+ (name gen)
+ (modules gen)
+ (libraries ctypes.stubs bindings))
+
+(rule
+ (targets arrow_stubs.ml)
+ (deps gen.exe)
+ (action (with-stdout-to arrow_stubs.ml (run ./gen.exe ml))))
+
+(rule
+ (targets arrow_stubs.c)
+ (deps gen.exe) 
+ (action (with-stdout-to arrow_stubs.c (run ./gen.exe c))))
+
+(library
+ (name arrow_stubs)
+ (public_name arrow2.stubs)
+ (modules arrow_stubs)
+ (libraries ctypes)
+ (foreign_stubs
+  (language c)
+  (names arrow_stubs)))
