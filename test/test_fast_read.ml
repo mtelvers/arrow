@@ -1,4 +1,4 @@
-open Arrow2
+open Arrow
 
 (* Helper function to check Column.t equality since we can't derive comparison *)
 let check_column msg expected actual =

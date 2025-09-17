@@ -1,4 +1,4 @@
-open Arrow2
+open Arrow
 
 let time_function f =
   let start_time = Sys.time () in

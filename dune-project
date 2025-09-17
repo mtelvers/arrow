@@ -1,11 +1,11 @@
 (lang dune 3.19)
 
-(name arrow2)
+(name arrow)
 
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github mtelvers/arrow))
 
 (authors "Author Name <author@example.com>")
 
@@ -16,7 +16,7 @@
 (documentation https://url/to/documentation)
 
 (package
- (name arrow2)
+ (name arrow)
  (synopsis "OCaml bindings for Apache Arrow")
  (description "OCaml bindings for Apache Arrow using standard OCaml libraries")
  (depends

@@ -1,4 +1,4 @@
-open Arrow2
+open Arrow
 
 let test_table_basic () =
   (* Test basic table creation with multiple data types and concatenation *)

@@ -1,22 +1,22 @@
 let () = 
-  print_endline ("Arrow2 Library Version: " ^ Arrow2.version);
+  print_endline ("Arrow Library Version: " ^ Arrow.version);
   print_endline "Successfully reimplemented ocaml-arrow with standard OCaml libraries!";
   
   (* Test some basic functionality *)
   let data = [| 1; 2; 3; 4; 5 |] in
-  let col = Arrow2.Wrapper.Writer.int data ~name:"test_column" in
-  let _table = Arrow2.Wrapper.Writer.create_table ~cols:[col] in
+  let col = Arrow.Wrapper.Writer.int data ~name:"test_column" in
+  let _table = Arrow.Wrapper.Writer.create_table ~cols:[col] in
   print_endline "✓ Writer functionality available";
   
-  let _valid_bits = Arrow2.Valid.from_array [| true; false; true; true; false |] in
-  let _valid = Arrow2.Valid.create 5 in
+  let _valid_bits = Arrow.Valid.from_array [| true; false; true; true; false |] in
+  let _valid = Arrow.Valid.create 5 in
   print_endline "✓ Validity bitmask handling available";
   
-  let _compression = Arrow2.Compression.Gzip in
+  let _compression = Arrow.Compression.Gzip in
   print_endline "✓ Compression options available";
   
-  let date = Arrow2.Datetime.Date.of_unix_days 19000 in
-  print_endline ("✓ Date handling available: " ^ (string_of_int (Arrow2.Datetime.Date.to_unix_days date)));
+  let date = Arrow.Datetime.Date.of_unix_days 19000 in
+  print_endline ("✓ Date handling available: " ^ (string_of_int (Arrow.Datetime.Date.to_unix_days date)));
   
   print_endline "🎉 All core functionality implemented and accessible!";
   
@@ -29,20 +29,20 @@ let () =
     
     try
       (* Open Parquet reader *)
-      let reader = Arrow2.Parquet_reader.create parquet_file in
+      let reader = Arrow.Parquet_reader.create parquet_file in
       print_endline "✓ Parquet reader created successfully";
       
       (* Read schema *)
-      let schema = Arrow2.Parquet_reader.schema parquet_file in
+      let schema = Arrow.Parquet_reader.schema parquet_file in
       print_endline ("✓ Schema loaded: " ^ schema.name);
       print_endline ("  Schema has " ^ (string_of_int (List.length schema.children)) ^ " columns:");
       List.iteri (fun i child -> 
-        print_endline ("    " ^ (string_of_int i) ^ ": " ^ child.Arrow2.Wrapper.Schema.name ^ " (format available)")
+        print_endline ("    " ^ (string_of_int i) ^ ": " ^ child.Arrow.Wrapper.Schema.name ^ " (format available)")
       ) schema.children;
       
       (* Read table *)
-      let table = Arrow2.Parquet_reader.table parquet_file in
-      let num_rows = Arrow2.Table.num_rows table in
+      let table = Arrow.Parquet_reader.table parquet_file in
+      let num_rows = Arrow.Table.num_rows table in
       print_endline ("✓ Table loaded with " ^ (string_of_int num_rows) ^ " rows");
       
       (* Display first few rows (up to 5) *)
@@ -53,7 +53,7 @@ let () =
         
         (* Try to get table debug string first to see if we can see ANY data *)
         print_endline "Getting table debug string...";
-        let debug_str = Arrow2.Table.to_string_debug table in
+        let debug_str = Arrow.Table.to_string_debug table in
         let debug_lines = String.split_on_char '\n' debug_str in
         let rec take n lst = match n, lst with
           | 0, _ | _, [] -> []
@@ -66,7 +66,7 @@ let () =
         print_endline "\nTrying column extraction...";
         (* Try to read column by index first *)
         let name_data = try
-          let data = Arrow2.Wrapper.Column.read_utf8 table ~column:(`Index 0) in
+          let data = Arrow.Wrapper.Column.read_utf8 table ~column:(`Index 0) in
           print_endline ("✓ Successfully read 'name' column, got " ^ (string_of_int (Array.length data)) ^ " values");
           if Array.length data > 0 then
             print_endline ("  First value: \"" ^ data.(0) ^ "\"");
@@ -90,7 +90,7 @@ let () =
       );
       
       (* Close reader *)
-      Arrow2.Parquet_reader.close reader;
+      Arrow.Parquet_reader.close reader;
       print_endline "✓ Parquet reader closed successfully"
       
     with
@@ -102,4 +102,4 @@ let () =
     print_endline "To test Parquet reading, create a test.parquet file in the current directory"
   );
   
-  print_endline "\n🚀 Arrow2 demonstration completed!"
+  print_endline "\n🚀 Arrow demonstration completed!"

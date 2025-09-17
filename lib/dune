@@ -1,6 +1,6 @@
 (library
- (name arrow2)
- (libraries ctypes ctypes.foreign ptime arrow2.stubs bindings)
+ (name arrow)
+ (libraries ctypes ctypes.foreign ptime arrow.stubs bindings)
  (private_modules c_wrapper bindings_generated)
  (foreign_stubs
   (language c)

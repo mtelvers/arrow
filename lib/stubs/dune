@@ -1,5 +1,6 @@
 (library
  (name bindings)
+ (public_name arrow.bindings)
  (modules bindings)
  (libraries ctypes ctypes.stubs))
 
@@ -27,7 +28,7 @@
 
 (library
  (name arrow_stubs)
- (public_name arrow2.stubs)
+ (public_name arrow.stubs)
  (modules arrow_stubs)
  (libraries ctypes)
  (foreign_stubs

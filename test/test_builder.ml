@@ -1,4 +1,4 @@
-open Arrow2
+open Arrow
 
 let test_double_builder () =
   let builder = Builder.Double.create () in

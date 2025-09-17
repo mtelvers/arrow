@@ -1,4 +1,4 @@
-open Arrow2
+open Arrow
 
 let bitset_to_string bitset =
   let chars = ref [] in

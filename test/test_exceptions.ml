@@ -1,4 +1,4 @@
-open Arrow2
+open Arrow
 
 let catch_and_extract_message f =
   try
