@@ -3,5 +3,5 @@
  (libraries arrow2))
 
 (test
- (name test_performance) 
+ (name test_performance)
  (libraries arrow2))

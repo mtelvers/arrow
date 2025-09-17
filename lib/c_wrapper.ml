@@ -219,78 +219,406 @@ module Parquet_reader = struct
     |> Table.with_free
 end
 
-(* Stub implementations for missing modules - to be completed later *)
+(* Writer module - mirrors Jane Street implementation *)
 module Writer = struct
-  type col = unit ptr
+  (* Release functions for Arrow C Data Interface *)
+  module Release_array_fn_ptr =
+    (val Foreign.dynamic_funptr (C.ArrowArray.t @-> returning void))
 
-  let fixed_ba ~format:_ _array ~name:_ = from_voidp void null
-  let fixed_ba_opt ~format:_ _array _valid ~name:_ = from_voidp void null
-  let string_ba ~format:_ ~offsets:_ ~data:_ ~name:_ = from_voidp void null
-  let string_ba_opt ~format:_ ~offsets:_ ~data:_ ~valid:_ ~name:_ = from_voidp void null
-  let int64_ba _array ~name:_ = from_voidp void null
-  let int64_ba_opt _array _valid ~name:_ = from_voidp void null
-  let int32_ba _array ~name:_ = from_voidp void null
-  let int32_ba_opt _array _valid ~name:_ = from_voidp void null
-  let float64_ba _array ~name:_ = from_voidp void null
-  let float64_ba_opt _array _valid ~name:_ = from_voidp void null
-  let date _array ~name:_ = from_voidp void null
-  let date_opt _array ~name:_ = from_voidp void null
-  let time_ns _array ~name:_ = from_voidp void null
-  let time_ns_opt _array ~name:_ = from_voidp void null
-  let span_ns _array ~name:_ = from_voidp void null
-  let span_ns_opt _array ~name:_ = from_voidp void null
-  let ofday_ns _array ~name:_ = from_voidp void null
-  let ofday_ns_opt _array ~name:_ = from_voidp void null
-  let bitset _valid ~name:_ = from_voidp void null
-  let bitset_opt _content ~valid:_ ~name:_ = from_voidp void null
-  let utf8 _array ~name:_ = from_voidp void null
-  let utf8_opt _array ~name:_ = from_voidp void null
-  let int _array ~name:_ = from_voidp void null
-  let int_opt _array ~name:_ = from_voidp void null
-  let float _array ~name:_ = from_voidp void null
-  let float_opt _array ~name:_ = from_voidp void null
-  let write ?chunk_size:_ ?compression:_ _filename ~cols:_ = ()
-  let create_table ~cols:_ = from_voidp void null
+  module Release_schema_fn_ptr =
+    (val Foreign.dynamic_funptr (C.ArrowSchema.t @-> returning void))
+
+  let release_schema _ = ()
+  let release_array _ = ()
+  let release_schema_ptr = coerce Release_schema_fn_ptr.t (ptr void) (Release_schema_fn_ptr.of_fun release_schema)
+  let release_array_ptr = coerce Release_array_fn_ptr.t (ptr void) (Release_array_fn_ptr.of_fun release_array)
+
+  let empty_schema_l = CArray.of_list (ptr C.ArrowSchema.t) []
+  let empty_array_l = CArray.of_list (ptr C.ArrowArray.t) []
+
+  type col = C.ArrowArray.t * C.ArrowSchema.t
+
+  let schema_struct ~format ~name ~children ~flag =
+    let format = CArray.of_string format in
+    let name = CArray.of_string name in
+    let s = make C.ArrowSchema.t ~finalise:(fun _ ->
+        use_value format;
+        use_value name;
+        use_value children)
+    in
+    setf s C.ArrowSchema.format (CArray.start format);
+    setf s C.ArrowSchema.name (CArray.start name);
+    setf s C.ArrowSchema.metadata (null |> from_voidp char);
+    setf s C.ArrowSchema.flags (Schema.Flags.to_cint flag);
+    setf s C.ArrowSchema.n_children (CArray.length children |> Int64.of_int);
+    setf s C.ArrowSchema.children (CArray.start children);
+    setf s C.ArrowSchema.dictionary (null |> from_voidp C.ArrowSchema.t);
+    setf s C.ArrowSchema.release release_schema_ptr;
+    s
+
+  let array_struct ~null_count ~buffers ~children ~length ~finalise =
+    let a = make ~finalise:(fun _ ->
+        finalise ();
+        use_value buffers;
+        use_value children)
+      C.ArrowArray.t
+    in
+    setf a C.ArrowArray.length (Int64.of_int length);
+    setf a C.ArrowArray.null_count (Int64.of_int null_count);
+    setf a C.ArrowArray.offset Int64.zero;
+    setf a C.ArrowArray.n_buffers (CArray.length buffers |> Int64.of_int);
+    setf a C.ArrowArray.buffers (CArray.start buffers);
+    setf a C.ArrowArray.n_children (CArray.length children |> Int64.of_int);
+    setf a C.ArrowArray.children (CArray.start children);
+    setf a C.ArrowArray.dictionary (null |> from_voidp C.ArrowArray.t);
+    setf a C.ArrowArray.release release_array_ptr;
+    a
+
+  (* Helper functions - Jane Street pattern *)
+  let fixed_ba ~format array ~name =
+    let buffers = CArray.of_list (ptr void)
+        [ null; bigarray_start array1 array |> to_voidp ]
+    in
+    let array_struct = array_struct
+        ~buffers
+        ~children:empty_array_l
+        ~null_count:0
+        ~finalise:(fun _ -> use_value array)
+        ~length:(Bigarray.Array1.dim array)
+    in
+    let schema_struct = schema_struct ~format ~name
+        ~children:empty_schema_l ~flag:Schema.Flags.none
+    in
+    (array_struct, schema_struct : col)
+
+  let fixed_ba_opt ~format array valid ~name =
+    if Bigarray.Array1.dim array <> Valid.length valid then failwith "incoherent lengths";
+    let buffers = CArray.of_list (ptr void)
+        [ bigarray_start array1 (Valid.bigarray valid) |> to_voidp
+        ; bigarray_start array1 array |> to_voidp
+        ]
+    in
+    let array_struct = array_struct
+        ~buffers
+        ~children:empty_array_l
+        ~null_count:(Valid.num_false valid)
+        ~finalise:(fun _ ->
+          use_value array;
+          use_value valid)
+        ~length:(Bigarray.Array1.dim array)
+    in
+    let schema_struct = schema_struct ~format ~name
+        ~children:empty_schema_l ~flag:Schema.Flags.nullable_
+    in
+    (array_struct, schema_struct : col)
+
+  let string_ba ~format ~offsets ~data ~name =
+    let buffers = CArray.of_list (ptr void)
+        [ null
+        ; bigarray_start array1 offsets |> to_voidp
+        ; bigarray_start array1 data |> to_voidp
+        ]
+    in
+    let array_struct = array_struct
+        ~buffers
+        ~children:empty_array_l
+        ~null_count:0
+        ~finalise:(fun _ ->
+          use_value offsets;
+          use_value data)
+        ~length:(Bigarray.Array1.dim offsets - 1)
+    in
+    let schema_struct = schema_struct ~format ~name
+        ~children:empty_schema_l ~flag:Schema.Flags.none
+    in
+    (array_struct, schema_struct : col)
+
+  let string_ba_opt ~format ~offsets ~data ~valid ~name =
+    if Bigarray.Array1.dim offsets - 1 <> Valid.length valid then failwith "incoherent lengths";
+    let buffers = CArray.of_list (ptr void)
+        [ bigarray_start array1 (Valid.bigarray valid) |> to_voidp
+        ; bigarray_start array1 offsets |> to_voidp
+        ; bigarray_start array1 data |> to_voidp
+        ]
+    in
+    let array_struct = array_struct
+        ~buffers
+        ~children:empty_array_l
+        ~null_count:(Valid.num_false valid)
+        ~finalise:(fun _ ->
+          use_value offsets;
+          use_value data;
+          use_value valid)
+        ~length:(Bigarray.Array1.dim offsets - 1)
+    in
+    let schema_struct = schema_struct ~format ~name
+        ~children:empty_schema_l ~flag:Schema.Flags.nullable_
+    in
+    (array_struct, schema_struct : col)
+
+  (* Real implementations using Jane Street pattern *)
+  let int array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length array) in
+    Array.iteri (fun i x -> ba.{i} <- Int64.of_int x) array;
+    fixed_ba ~format:"l" ba ~name
+
+  let int_opt array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length array) in
+    let valid = Valid.create (Array.length array) in
+    Array.iteri (fun i -> function
+      | Some x -> ba.{i} <- Int64.of_int x; Valid.set_valid valid i
+      | None -> ba.{i} <- 0L; Valid.set_invalid valid i
+    ) array;
+    fixed_ba_opt ~format:"l" ba valid ~name
+
+  let float array ~name =
+    let ba = Bigarray.Array1.create Bigarray.float64 Bigarray.c_layout (Array.length array) in
+    Array.iteri (fun i x -> ba.{i} <- x) array;
+    fixed_ba ~format:"g" ba ~name
+
+  let float_opt array ~name =
+    let ba = Bigarray.Array1.create Bigarray.float64 Bigarray.c_layout (Array.length array) in
+    let valid = Valid.create (Array.length array) in
+    Array.iteri (fun i -> function
+      | Some x -> ba.{i} <- x; Valid.set_valid valid i
+      | None -> ba.{i} <- 0.0; Valid.set_invalid valid i
+    ) array;
+    fixed_ba_opt ~format:"g" ba valid ~name
+
+  let utf8 array ~name =
+    let total_length = Array.fold_left (fun acc s -> acc + String.length s) 0 array in
+    let offsets = Bigarray.Array1.create Bigarray.int32 Bigarray.c_layout (Array.length array + 1) in
+    let data = Bigarray.Array1.create Bigarray.char Bigarray.c_layout total_length in
+    let current_offset = ref 0 in
+    offsets.{0} <- 0l;
+    Array.iteri (fun i s ->
+      let len = String.length s in
+      String.iteri (fun j c -> data.{!current_offset + j} <- c) s;
+      current_offset := !current_offset + len;
+      offsets.{i + 1} <- Int32.of_int !current_offset
+    ) array;
+    string_ba ~format:"u" ~offsets ~data ~name
+
+  let utf8_opt array ~name =
+    let total_length = Array.fold_left (fun acc -> function
+      | Some s -> acc + String.length s | None -> acc) 0 array in
+    let offsets = Bigarray.Array1.create Bigarray.int32 Bigarray.c_layout (Array.length array + 1) in
+    let data = Bigarray.Array1.create Bigarray.char Bigarray.c_layout total_length in
+    let valid = Valid.create (Array.length array) in
+    let current_offset = ref 0 in
+    offsets.{0} <- 0l;
+    Array.iteri (fun i -> function
+      | Some s ->
+        let len = String.length s in
+        String.iteri (fun j c -> data.{!current_offset + j} <- c) s;
+        current_offset := !current_offset + len;
+        offsets.{i + 1} <- Int32.of_int !current_offset;
+        Valid.set_valid valid i
+      | None ->
+        offsets.{i + 1} <- Int32.of_int !current_offset;
+        Valid.set_invalid valid i
+    ) array;
+    string_ba_opt ~format:"u" ~offsets ~data ~valid ~name
+
+  (* Bigarray convenience functions *)
+  let int64_ba array ~name = fixed_ba ~format:"l" array ~name
+  let int64_ba_opt array valid ~name = fixed_ba_opt ~format:"l" array valid ~name
+  let int32_ba array ~name = fixed_ba ~format:"i" array ~name
+  let int32_ba_opt array valid ~name = fixed_ba_opt ~format:"i" array valid ~name
+  let float64_ba array ~name = fixed_ba ~format:"g" array ~name
+  let float64_ba_opt array valid ~name = fixed_ba_opt ~format:"g" array valid ~name
+  let date date_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int32 Bigarray.c_layout (Array.length date_array) in
+    Array.iteri (fun i date ->
+      let days = Datetime.Date.to_unix_days date |> Int32.of_int in
+      ba.{i} <- days
+    ) date_array;
+    fixed_ba ~format:"tdD" ba ~name
+  let date_opt date_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int32 Bigarray.c_layout (Array.length date_array) in
+    let valid = Valid.create (Array.length date_array) in
+    Array.iteri (fun i -> function
+      | Some date ->
+        let days = Datetime.Date.to_unix_days date |> Int32.of_int in
+        ba.{i} <- days; Valid.set_valid valid i
+      | None -> ba.{i} <- 0l; Valid.set_invalid valid i
+    ) date_array;
+    fixed_ba_opt ~format:"tdD" ba valid ~name
+  let time_ns time_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length time_array) in
+    Array.iteri (fun i time ->
+      let ns = Datetime.Time_ns.to_int64_ns_since_epoch time in
+      ba.{i} <- ns
+    ) time_array;
+    fixed_ba ~format:"tsn:UTC" ba ~name
+  let time_ns_opt time_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length time_array) in
+    let valid = Valid.create (Array.length time_array) in
+    Array.iteri (fun i -> function
+      | Some time ->
+        let ns = Datetime.Time_ns.to_int64_ns_since_epoch time in
+        ba.{i} <- ns; Valid.set_valid valid i
+      | None -> ba.{i} <- 0L; Valid.set_invalid valid i
+    ) time_array;
+    fixed_ba_opt ~format:"tsn:UTC" ba valid ~name
+  let span_ns span_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length span_array) in
+    Array.iteri (fun i span ->
+      let ns = Datetime.Time_ns.Span.to_ns span in
+      ba.{i} <- ns
+    ) span_array;
+    fixed_ba ~format:"tDn" ba ~name
+  let span_ns_opt span_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length span_array) in
+    let valid = Valid.create (Array.length span_array) in
+    Array.iteri (fun i -> function
+      | Some span ->
+        let ns = Datetime.Time_ns.Span.to_ns span in
+        ba.{i} <- ns; Valid.set_valid valid i
+      | None -> ba.{i} <- 0L; Valid.set_invalid valid i
+    ) span_array;
+    fixed_ba_opt ~format:"tDn" ba valid ~name
+  let ofday_ns ofday_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length ofday_array) in
+    Array.iteri (fun i ofday ->
+      let ns = Datetime.Time_ns.Ofday.to_ns_since_midnight ofday in
+      ba.{i} <- ns
+    ) ofday_array;
+    fixed_ba ~format:"ttn" ba ~name
+  let ofday_ns_opt ofday_array ~name =
+    let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length ofday_array) in
+    let valid = Valid.create (Array.length ofday_array) in
+    Array.iteri (fun i -> function
+      | Some ofday ->
+        let ns = Datetime.Time_ns.Ofday.to_ns_since_midnight ofday in
+        ba.{i} <- ns; Valid.set_valid valid i
+      | None -> ba.{i} <- 0L; Valid.set_invalid valid i
+    ) ofday_array;
+    fixed_ba_opt ~format:"ttn" ba valid ~name
+  let bitset valid ~name =
+    let array = Valid.bigarray valid in
+    let buffers = CArray.of_list (ptr void)
+        [ null; bigarray_start array1 array |> to_voidp ]
+    in
+    let array_struct = array_struct
+        ~buffers
+        ~children:empty_array_l
+        ~null_count:0
+        ~finalise:(fun _ -> use_value array)
+        ~length:(Valid.length valid)
+    in
+    let schema_struct = schema_struct ~format:"b" ~name
+        ~children:empty_schema_l ~flag:Schema.Flags.none
+    in
+    (array_struct, schema_struct : col)
+  let bitset_opt content ~valid ~name =
+    if Valid.length content <> Valid.length valid then failwith "incoherent lengths";
+    let array = Valid.bigarray content in
+    let buffers = CArray.of_list (ptr void)
+        [ bigarray_start array1 (Valid.bigarray valid) |> to_voidp
+        ; bigarray_start array1 array |> to_voidp
+        ]
+    in
+    let array_struct = array_struct
+        ~buffers
+        ~children:empty_array_l
+        ~null_count:(Valid.num_false valid)
+        ~finalise:(fun _ ->
+          use_value array;
+          use_value valid)
+        ~length:(Valid.length content)
+    in
+    let schema_struct = schema_struct ~format:"b" ~name
+        ~children:empty_schema_l ~flag:Schema.Flags.nullable_
+    in
+    (array_struct, schema_struct : col)
+
+  let rec write ?chunk_size ?compression filename ~cols =
+    (* Use the actual C++ parquet_write_table function *)
+    let chunk_size = Option.value chunk_size ~default:(1024 * 1024) in
+    let compression = Option.value compression ~default:Compression.Snappy |> Compression.to_int in
+
+    (* Create table from columns using make_table *)
+    let table = create_table ~cols in
+
+    (* Write table using C++ function *)
+    C.Table.parquet_write filename table chunk_size compression
+
+  and create_table ~cols =
+    (* Jane Street pattern: Use C Data Interface *)
+    let n_cols = List.length cols in
+    if n_cols = 0 then
+      C.csv_read_table "" |> Table.with_free
+    else if n_cols = 1 then (
+      (* Single column case - use create_table directly *)
+      let (array, schema) = List.hd cols in
+      C.Table.create (addr array) (addr schema) |> Table.with_free
+    ) else (
+      (* Multiple columns - create individual tables and concatenate *)
+      let tables = List.map (fun (array, schema) ->
+        C.Table.create (addr array) (addr schema)
+      ) cols in
+      let tables_array = Array.of_list tables in
+      let ptrs_carray = CArray.of_list C.Table.t (Array.to_list tables_array) in
+      C.Table.concatenate (CArray.start ptrs_carray) (Array.length tables_array)
+      |> Table.with_free
+    )
 end
 
 module DoubleBuilder = struct
-  type t = unit ptr
+  type t = C.DoubleBuilder.t
   
-  let create () = from_voidp void null
-  let append _t _value = ()
-  let append_null ?n:_ _t = ()
-  let length _t = 0L
-  let null_count _t = 0L
+  let create () = 
+    let builder = C.DoubleBuilder.create () in
+    Gc.finalise C.DoubleBuilder.free builder;
+    builder
+    
+  let append t value = C.DoubleBuilder.append t value
+  let append_null ?(n=1) t = C.DoubleBuilder.append_null t n
+  let length t = C.DoubleBuilder.length t
+  let null_count t = C.DoubleBuilder.null_count t
 end
 
 module Int32Builder = struct
-  type t = unit ptr
+  type t = C.Int32Builder.t
   
-  let create () = from_voidp void null
-  let append _t _value = ()
-  let append_null ?n:_ _t = ()
-  let length _t = 0L
-  let null_count _t = 0L
+  let create () = 
+    let builder = C.Int32Builder.create () in
+    Gc.finalise C.Int32Builder.free builder;
+    builder
+    
+  let append t value = C.Int32Builder.append t value
+  let append_null ?(n=1) t = C.Int32Builder.append_null t n
+  let length t = C.Int32Builder.length t
+  let null_count t = C.Int32Builder.null_count t
 end
 
 module Int64Builder = struct
-  type t = unit ptr
+  type t = C.Int64Builder.t
   
-  let create () = from_voidp void null
-  let append _t _value = ()
-  let append_null ?n:_ _t = ()
-  let length _t = 0L
-  let null_count _t = 0L
+  let create () = 
+    let builder = C.Int64Builder.create () in
+    Gc.finalise C.Int64Builder.free builder;
+    builder
+    
+  let append t value = C.Int64Builder.append t value
+  let append_null ?(n=1) t = C.Int64Builder.append_null t n
+  let length t = C.Int64Builder.length t
+  let null_count t = C.Int64Builder.null_count t
 end
 
 module StringBuilder = struct
-  type t = unit ptr
+  type t = C.StringBuilder.t
   
-  let create () = from_voidp void null
-  let append _t _value = ()
-  let append_null ?n:_ _t = ()
-  let length _t = 0L
-  let null_count _t = 0L
+  let create () = 
+    let builder = C.StringBuilder.create () in
+    Gc.finalise C.StringBuilder.free builder;
+    builder
+    
+  let append t value = C.StringBuilder.append t value
+  let append_null ?(n=1) t = C.StringBuilder.append_null t n
+  let length t = C.StringBuilder.length t
+  let null_count t = C.StringBuilder.null_count t
 end
 
 module Builder = struct
@@ -300,7 +628,33 @@ module Builder = struct
     | Int64 of Int64Builder.t
     | String of StringBuilder.t
 
-  let make_table _named_builders = from_voidp void null
+  let make_table named_builders =
+    let n = List.length named_builders in
+    if n = 0 then
+      (* Return empty table for no builders *)
+      C.csv_read_table "" |> Table.with_free
+    else (
+      let builders = Array.make n (from_voidp void null) in
+      let names = Array.make n (from_voidp char null) in
+      List.iteri (fun i (name, builder) ->
+        let builder_ptr = match builder with
+          | Double b -> to_voidp b
+          | Int32 b -> to_voidp b
+          | Int64 b -> to_voidp b
+          | String b -> to_voidp b
+        in
+        builders.(i) <- builder_ptr;
+        let name_ptr = ptr_of_string name in
+        names.(i) <- name_ptr
+      ) named_builders;
+      let builders_array = CArray.of_list (ptr void) (Array.to_list builders) in
+      let names_array = CArray.of_list (ptr char) (Array.to_list names) in
+      C.make_table 
+        (CArray.start builders_array)
+        (CArray.start names_array)
+        n
+      |> Table.with_free
+    )
 end
 
 
@@ -378,6 +732,169 @@ module Column = struct
         failwith ("expected 2 columns or more, got " ^ string_of_int (List.length buffers))
   end
 
+  let read_int table ~column =
+    with_column table Int64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows 0 in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                for idx = 0 to chunk.length - 1 do
+                  let value = !@(data +@ idx) |> Int64.to_int in
+                  dst.(dst_offset + idx) <- value
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_int32 table ~column =
+    with_column table Int32 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows Int32.zero in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                let data = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
+                for idx = 0 to chunk.length - 1 do
+                  let value = !@(data +@ idx) in
+                  dst.(dst_offset + idx) <- value
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_float table ~column =
+    with_column table Float64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows 0.0 in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                let data = Chunk.primitive_data_ptr chunk ~ctype:double in
+                for idx = 0 to chunk.length - 1 do
+                  let value = !@(data +@ idx) in
+                  dst.(dst_offset + idx) <- value
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_int_opt table ~column = 
+    with_column table Int64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  (* All nulls - dst already initialized with None *)
+                  dst_offset + chunk.length
+                else (
+                  let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  for idx = 0 to chunk.length - 1 do
+                    let value = !@(data +@ idx) |> Int64.to_int in
+                    dst.(dst_offset + idx) <- Some value
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
+  let read_int32_opt table ~column =
+    with_column table Int32 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  (* All nulls - dst already initialized with None *)
+                  dst_offset + chunk.length
+                else (
+                  let data = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
+                  for idx = 0 to chunk.length - 1 do
+                    let value = !@(data +@ idx) in
+                    dst.(dst_offset + idx) <- Some value
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
+  let read_float_opt table ~column = 
+    with_column table Float64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  (* All nulls - dst already initialized with None *)
+                  dst_offset + chunk.length
+                else (
+                  let data = Chunk.primitive_data_ptr chunk ~ctype:double in
+                  for idx = 0 to chunk.length - 1 do
+                    let value = !@(data +@ idx) in
+                    dst.(dst_offset + idx) <- Some value
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
+  let read_utf8_opt table ~column = 
+    with_column table Utf8 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  (* All nulls - dst already initialized with None *)
+                  dst_offset + chunk.length
+                else (
+                  let offsets = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
+                  let data =
+                    match chunk.buffers with
+                    | [ _; _; data ] -> from_voidp char data
+                    | _ -> failwith "expected 3 buffers for utf8"
+                  in
+                  for idx = 0 to chunk.length - 1 do
+                    let str_offset = !@(offsets +@ idx) |> Int32.to_int in
+                    let next_str_offset = !@(offsets +@ (idx + 1)) |> Int32.to_int in
+                    let str =
+                      string_from_ptr (data +@ str_offset)
+                        ~length:(next_str_offset - str_offset)
+                    in
+                    dst.(dst_offset + idx) <- Some str
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
   let read_utf8 table ~column =
     with_column table Utf8 ~column ~f:(fun chunks ->
         let num_rows = num_rows chunks in
@@ -412,37 +929,58 @@ module Column = struct
           in
           dst
         ))
-        
-  let read_i32_ba _table ~column:_ = Bigarray.Array1.create Bigarray.int32 Bigarray.c_layout 0
-  let read_i64_ba _table ~column:_ = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout 0 
-  let read_f64_ba _table ~column:_ = Bigarray.Array1.create Bigarray.float64 Bigarray.c_layout 0
-  let read_f32_ba _table ~column:_ = Bigarray.Array1.create Bigarray.float32 Bigarray.c_layout 0
+
+  let of_chunks chunks ~kind ~ctype =
+    let num_rows = num_rows chunks in
+    let dst = Bigarray.Array1.create kind Bigarray.c_layout num_rows in
+    let _num_rows =
+      List.fold_left (fun dst_offset chunk ->
+          let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+          let ptr = Chunk.primitive_data_ptr chunk ~ctype in
+          let dst_sub = Bigarray.Array1.sub dst dst_offset chunk.length in
+          let src = bigarray_of_ptr array1 chunk.length kind ptr in
+          Bigarray.Array1.blit src dst_sub;
+          dst_offset + chunk.length) 0 chunks
+    in
+    dst
+
+  let read_ba table ~datatype ~kind ~ctype ~column =
+    with_column table datatype ~column ~f:(of_chunks ~kind ~ctype)
+
+  let read_ba_opt table ~datatype ~kind ~ctype ~column =
+    with_column table datatype ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        let dst = Bigarray.Array1.create kind Bigarray.c_layout num_rows in
+        let valid = Valid.create_all_valid num_rows in
+        let _num_rows =
+          List.fold_left (fun dst_offset chunk ->
+              let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:true in
+              if chunk.null_count = chunk.length then (
+                for i = 0 to chunk.length - 1 do
+                  Valid.set valid (dst_offset + i) false
+                done;
+                dst_offset + chunk.length
+              ) else (
+                let ptr = Chunk.primitive_data_ptr chunk ~ctype in
+                let dst_sub = Bigarray.Array1.sub dst dst_offset chunk.length in
+                let src = bigarray_of_ptr array1 chunk.length kind ptr in
+                Bigarray.Array1.blit src dst_sub;
+                dst_offset + chunk.length
+              )) 0 chunks
+        in
+        dst, valid)
+
+  let read_i32_ba table ~column = read_ba table ~datatype:Int32 ~kind:Bigarray.int32 ~ctype:int32_t ~column
+  let read_i64_ba table ~column = read_ba table ~datatype:Int64 ~kind:Bigarray.int64 ~ctype:int64_t ~column 
+  let read_f64_ba table ~column = read_ba table ~datatype:Float64 ~kind:Bigarray.float64 ~ctype:double ~column
+  let read_f32_ba table ~column = read_ba table ~datatype:Float32 ~kind:Bigarray.float32 ~ctype:float ~column
   
-  let read_int _table ~column:_ = [||]
-  let read_int32 _table ~column:_ = [||] 
-  let read_float _table ~column:_ = [||]
-  let read_date _table ~column:_ = [||]
-  let read_time_ns _table ~column:_ = [||]
-  let read_ofday_ns _table ~column:_ = [||]
-  let read_span_ns _table ~column:_ = [||]
 
-  let read_i32_ba_opt _table ~column:_ = 
-    (Bigarray.Array1.create Bigarray.int32 Bigarray.c_layout 0, ())
-  let read_i64_ba_opt _table ~column:_ = 
-    (Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout 0, ())
-  let read_f64_ba_opt _table ~column:_ = 
-    (Bigarray.Array1.create Bigarray.float64 Bigarray.c_layout 0, ())
-  let read_f32_ba_opt _table ~column:_ = 
-    (Bigarray.Array1.create Bigarray.float32 Bigarray.c_layout 0, ())
+  let read_i32_ba_opt table ~column = read_ba_opt table ~datatype:Int32 ~kind:Bigarray.int32 ~ctype:int32_t ~column
+  let read_i64_ba_opt table ~column = read_ba_opt table ~datatype:Int64 ~kind:Bigarray.int64 ~ctype:int64_t ~column
+  let read_f64_ba_opt table ~column = read_ba_opt table ~datatype:Float64 ~kind:Bigarray.float64 ~ctype:double ~column
+  let read_f32_ba_opt table ~column = read_ba_opt table ~datatype:Float32 ~kind:Bigarray.float32 ~ctype:float ~column
 
-  let read_int_opt _table ~column:_ = [||]
-  let read_int32_opt _table ~column:_ = [||]
-  let read_float_opt _table ~column:_ = [||]
-  let read_utf8_opt _table ~column:_ = [||]
-  let read_date_opt _table ~column:_ = [||]
-  let read_time_ns_opt _table ~column:_ = [||]
-  let read_ofday_ns_opt _table ~column:_ = [||] 
-  let read_span_ns_opt _table ~column:_ = [||]
 
   type t =
     | Unsupported_type
@@ -452,6 +990,226 @@ module Column = struct
     | Int64_option of (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
     | Double of (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t
     | Double_option of (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+
+  let read_date table ~column =
+    with_column table Date32 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows (Datetime.Date.of_unix_days 0) in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                let data = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
+                for idx = 0 to chunk.length - 1 do
+                  let days = !@(data +@ idx) |> Int32.to_int in
+                  dst.(dst_offset + idx) <- Datetime.Date.of_unix_days days
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_time_ns table ~column =
+    with_column table Time64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows (Datetime.Time_ns.of_int64_ns_since_epoch 0L) in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                for idx = 0 to chunk.length - 1 do
+                  let ns = !@(data +@ idx) in
+                  dst.(dst_offset + idx) <- Datetime.Time_ns.of_int64_ns_since_epoch ns
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_span_ns table ~column =
+    with_column table Duration ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows (Datetime.Time_ns.Span.of_ns 0L) in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                for idx = 0 to chunk.length - 1 do
+                  let ns = !@(data +@ idx) in
+                  dst.(dst_offset + idx) <- Datetime.Time_ns.Span.of_ns ns
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_ofday_ns table ~column =
+    with_column table Time64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows (Datetime.Time_ns.Ofday.of_ns_since_midnight 0L) in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                for idx = 0 to chunk.length - 1 do
+                  let ns = !@(data +@ idx) in
+                  dst.(dst_offset + idx) <- Datetime.Time_ns.Ofday.of_ns_since_midnight ns
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_date_opt table ~column =
+    with_column table Date32 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  dst_offset + chunk.length
+                else (
+                  let data = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
+                  for idx = 0 to chunk.length - 1 do
+                    let days = !@(data +@ idx) |> Int32.to_int in
+                    dst.(dst_offset + idx) <- Some (Datetime.Date.of_unix_days days)
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
+  let read_time_ns_opt table ~column =
+    with_column table Time64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  dst_offset + chunk.length
+                else (
+                  let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  for idx = 0 to chunk.length - 1 do
+                    let ns = !@(data +@ idx) in
+                    dst.(dst_offset + idx) <- Some (Datetime.Time_ns.of_int64_ns_since_epoch ns)
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
+  let read_span_ns_opt table ~column =
+    with_column table Duration ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  dst_offset + chunk.length
+                else (
+                  let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  for idx = 0 to chunk.length - 1 do
+                    let ns = !@(data +@ idx) in
+                    dst.(dst_offset + idx) <- Some (Datetime.Time_ns.Span.of_ns ns)
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
+  let read_ofday_ns_opt table ~column =
+    with_column table Time64 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  dst_offset + chunk.length
+                else (
+                  let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  for idx = 0 to chunk.length - 1 do
+                    let ns = !@(data +@ idx) in
+                    dst.(dst_offset + idx) <- Some (Datetime.Time_ns.Ofday.of_ns_since_midnight ns)
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
+          in
+          dst
+        ))
+
+  let read_bitset table ~column =
+    with_column table Bool ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        let bitset = Valid.create_all_valid num_rows in
+        let _num_rows =
+          List.fold_left (fun dst_offset chunk ->
+              let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:true in
+              let ptr_ = Chunk.primitive_data_ptr chunk ~ctype:uint8_t in
+              for bidx = 0 to ((chunk.length + 7) / 8) - 1 do
+                let byte = !@(ptr_ +@ bidx) |> Unsigned.UInt8.to_int in
+                let max_idx = min 8 (chunk.length - (8 * bidx)) in
+                for bit_idx = 0 to max_idx - 1 do
+                  let global_idx = dst_offset + (8 * bidx) + bit_idx in
+                  let bit_value = (byte lsr bit_idx) land 1 = 1 in
+                  Valid.set bitset global_idx bit_value
+                done
+              done;
+              dst_offset + chunk.length) 0 chunks
+        in
+        bitset)
+
+  let read_bitset_opt table ~column =
+    with_column table Bool ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        let bitset = Valid.create_all_valid num_rows in
+        let valid = Valid.create_all_valid num_rows in
+        let _num_rows =
+          List.fold_left (fun dst_offset chunk ->
+              let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:true in
+              if chunk.null_count = chunk.length then (
+                (* All nulls - mark all as invalid *)
+                for i = 0 to chunk.length - 1 do
+                  Valid.set valid (dst_offset + i) false
+                done;
+                dst_offset + chunk.length
+              ) else (
+                let ptr_ = Chunk.primitive_data_ptr chunk ~ctype:uint8_t in
+                for bidx = 0 to ((chunk.length + 7) / 8) - 1 do
+                  let byte = !@(ptr_ +@ bidx) |> Unsigned.UInt8.to_int in
+                  let max_idx = min 8 (chunk.length - (8 * bidx)) in
+                  for bit_idx = 0 to max_idx - 1 do
+                    let global_idx = dst_offset + (8 * bidx) + bit_idx in
+                    let bit_value = (byte lsr bit_idx) land 1 = 1 in
+                    Valid.set bitset global_idx bit_value;
+                    Valid.set valid global_idx true
+                  done
+                done;
+                dst_offset + chunk.length
+              )) 0 chunks
+        in
+        bitset, valid)
 
   let fast_read _table _column_index = Unsupported_type
 end

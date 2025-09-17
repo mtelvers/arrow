@@ -114,7 +114,7 @@ module Test_Valid = struct
     let is_valid_0 = Arrow2.Valid.is_valid valid 0 in
     let is_valid_1 = Arrow2.Valid.is_valid valid 1 in
     assert_true is_valid_0 ~msg:"Element 0 should be valid";
-    assert_true is_valid_1 ~msg:"Element 1 should show as valid (stub implementation)"
+    assert_true (not is_valid_1) ~msg:"Element 1 should be invalid after set_invalid"
 
   let run_tests () =
     test "Validity creation" test_validity_creation;

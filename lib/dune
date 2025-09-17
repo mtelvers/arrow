@@ -2,16 +2,24 @@
  (name arrow2)
  (libraries ctypes ctypes.foreign ptime arrow2.stubs bindings)
  (private_modules c_wrapper bindings_generated)
- (foreign_stubs (language c) (names arrow_c_api_stubs))
- (foreign_stubs (language cxx) (names arrow_c_api) (flags -fPIC -std=c++17))
+ (foreign_stubs
+  (language c)
+  (names arrow_c_api_stubs))
+ (foreign_stubs
+  (language cxx)
+  (names arrow_c_api)
+  (flags -fPIC -std=c++17))
  (c_library_flags :standard -larrow -lparquet -lstdc++))
 
 (rule
-  (targets bindings.ml)
-  (deps    stubs/bindings.ml)
-  (action  (copy stubs/bindings.ml bindings.ml)))
+ (targets bindings.ml)
+ (deps stubs/bindings.ml)
+ (action
+  (copy stubs/bindings.ml bindings.ml)))
 
 (rule
-  (targets arrow_c_api_stubs.c bindings_generated.ml)
-  (deps    (:gen stubs/gen.exe))
-  (action  (run %{gen})))
+ (targets arrow_c_api_stubs.c bindings_generated.ml)
+ (deps
+  (:gen stubs/gen.exe))
+ (action
+  (run %{gen})))

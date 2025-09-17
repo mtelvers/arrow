@@ -109,22 +109,22 @@ module Column : sig
   val read_i32_ba_opt
     :  Table.t
     -> column:column
-    -> (int32, Bigarray.int32_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+    -> (int32, Bigarray.int32_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.t
 
   val read_i64_ba_opt
     :  Table.t
     -> column:column
-    -> (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+    -> (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.t
 
   val read_f64_ba_opt
     :  Table.t
     -> column:column
-    -> (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+    -> (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.t
 
   val read_f32_ba_opt
     :  Table.t
     -> column:column
-    -> (float, Bigarray.float32_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+    -> (float, Bigarray.float32_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.t
 
   val read_int_opt : Table.t -> column:column -> int option array
   val read_int32_opt : Table.t -> column:column -> Int32.t option array
@@ -134,6 +134,9 @@ module Column : sig
   val read_time_ns_opt : Table.t -> column:column -> Datetime.Time_ns.t option array
   val read_ofday_ns_opt : Table.t -> column:column -> Datetime.Time_ns.Ofday.t option array
   val read_span_ns_opt : Table.t -> column:column -> Datetime.Time_ns.Span.t option array
+
+  val read_bitset : Table.t -> column:column -> Valid.t
+  val read_bitset_opt : Table.t -> column:column -> Valid.t * Valid.t
 
   type t =
     | Unsupported_type
