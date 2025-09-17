@@ -127,6 +127,46 @@ let test_row_builder () =
   SimpleRowBuilder.reset builder;
   Alcotest.(check int) "Row builder length after reset" 0 (SimpleRowBuilder.length builder)
 
+let test_comprehensive_builders () =
+  (* Port of the comprehensive builder test from Jane Street *)
+  let col1 = Wrapper.StringBuilder.create () in
+  let col2 = Wrapper.DoubleBuilder.create () in
+  let col3 = Wrapper.Int64Builder.create () in  (* NativeInt -> Int64 in our implementation *)
+  let col4 = Wrapper.Int32Builder.create () in
+  for i = 1 to 3 do
+    Wrapper.StringBuilder.append col1 "v1";
+    Wrapper.StringBuilder.append col1 "v2";
+    Wrapper.StringBuilder.append col1 "v3";
+    Wrapper.DoubleBuilder.append col2 (Float.of_int i +. 0.5);
+    Wrapper.DoubleBuilder.append col2 (Float.of_int i +. 1.5);
+    Wrapper.DoubleBuilder.append_null col2;  (* append_opt None -> append_null in our API *)
+    Wrapper.Int64Builder.append col3 (Int64.of_int (2 * i));  (* append_opt Some x -> append x *)
+    Wrapper.Int64Builder.append_null col3;
+    Wrapper.Int64Builder.append_null col3;
+    Wrapper.Int32Builder.append col4 (Int32.of_int (2 * i));  (* append_opt Some x -> append x *)
+    Wrapper.Int32Builder.append col4 (Int32.of_int (i * i));
+    Wrapper.Int32Builder.append_null col4
+  done;
+  let table =
+    Wrapper.Builder.make_table
+      [ "foo", Wrapper.Builder.String col1; "bar", Wrapper.Builder.Double col2; "baz", Wrapper.Builder.Int64 col3; "baz32", Wrapper.Builder.Int32 col4 ]
+  in
+  let foo = Wrapper.Column.read_utf8 table ~column:(`Name "foo") in
+  let bar = Wrapper.Column.read_float_opt table ~column:(`Name "bar") in
+  let baz = Wrapper.Column.read_int_opt table ~column:(`Name "baz") in
+  let baz32 = Wrapper.Column.read_int32_opt table ~column:(`Name "baz32") in
+
+  (* Verify exact Jane Street expected outputs *)
+  let expected_foo = [| "v1"; "v2"; "v3"; "v1"; "v2"; "v3"; "v1"; "v2"; "v3" |] in
+  let expected_bar = [| Some 1.5; Some 2.5; None; Some 2.5; Some 3.5; None; Some 3.5; Some 4.5; None |] in
+  let expected_baz = [| Some 2; None; None; Some 4; None; None; Some 6; None; None |] in
+  let expected_baz32 = [| Some 2l; Some 1l; None; Some 4l; Some 4l; None; Some 6l; Some 9l; None |] in
+
+  Alcotest.(check (array string)) "Comprehensive foo column" expected_foo foo;
+  Alcotest.(check (array (option (float 1e-6)))) "Comprehensive bar column" expected_bar bar;
+  Alcotest.(check (array (option int))) "Comprehensive baz column" expected_baz baz;
+  Alcotest.(check (array (option int32))) "Comprehensive baz32 column" expected_baz32 baz32
+
 let () =
   let open Alcotest in
   run "Builder tests" [
@@ -136,5 +176,6 @@ let () =
       test_case "Int builders" `Quick test_int_builders;
       test_case "Row-based builder" `Quick test_row_based_builder;
       test_case "Row builder module" `Quick test_row_builder;
+      test_case "Comprehensive builders test" `Quick test_comprehensive_builders;
     ];
   ]

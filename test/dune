@@ -17,3 +17,7 @@
 (test
  (name test_bitset)
  (libraries arrow2 alcotest))
+
+(test
+ (name test_exceptions)
+ (libraries arrow2 alcotest))
