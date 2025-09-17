@@ -1211,5 +1211,42 @@ module Column = struct
         in
         bitset, valid)
 
-  let fast_read _table _column_index = Unsupported_type
+  let fast_read table column_index =
+    try
+      (* Try to determine column type by attempting reads *)
+      let column = `Index column_index in
+
+      (* First try reading as String *)
+      try
+        let str_array = read_utf8 table ~column in
+        String str_array
+      with _ ->
+        (* Try reading as Int64 *)
+        try
+          let int64_ba = read_i64_ba table ~column in
+          Int64 int64_ba
+        with _ ->
+          (* Try reading as Double *)
+          try
+            let double_ba = read_f64_ba table ~column in
+            Double double_ba
+          with _ ->
+            (* Try reading as optional String *)
+            try
+              let str_opt_array = read_utf8_opt table ~column in
+              String_option str_opt_array
+            with _ ->
+              (* Try reading as optional Int64 *)
+              try
+                let int64_ba, _valid = read_i64_ba_opt table ~column in
+                Int64_option (int64_ba, ())
+              with _ ->
+                (* Try reading as optional Double *)
+                try
+                  let double_ba, _valid = read_f64_ba_opt table ~column in
+                  Double_option (double_ba, ())
+                with _ ->
+                  Unsupported_type
+    with _ ->
+      Unsupported_type
 end

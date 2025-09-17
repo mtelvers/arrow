@@ -1,8 +1,17 @@
 include C_wrapper
 
 module Feather_reader = struct
-  let schema _filename = { Schema.format = Datatype.Null; name = ""; metadata = []; flags = 0; children = [] }
-  let table ?column_idxs:_ _filename = Ctypes.(from_voidp void null)
+  let schema filename = C.Feather_reader.schema filename |> Schema.of_c
+
+  let table ?(column_idxs = []) filename =
+    let column_idxs = Ctypes.CArray.of_list Ctypes.int column_idxs in
+    let t = C.Feather_reader.read_table
+      filename
+      (Ctypes.CArray.start column_idxs)
+      (Ctypes.CArray.length column_idxs)
+    in
+    Gc.finalise C.Table.free t;
+    t
 end
 
 
