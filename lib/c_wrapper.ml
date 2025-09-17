@@ -1031,9 +1031,9 @@ module Column = struct
     | String of string array
     | String_option of string option array
     | Int64 of (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t
-    | Int64_option of (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+    | Int64_option of (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.ba
     | Double of (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t
-    | Double_option of (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+    | Double_option of (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.ba
 
   let read_date table ~column =
     with_column table Date32 ~column ~f:(fun chunks ->
@@ -1282,13 +1282,13 @@ module Column = struct
             with _ ->
               (* Try reading as optional Int64 *)
               try
-                let int64_ba, _valid = read_i64_ba_opt table ~column in
-                Int64_option (int64_ba, ())
+                let int64_ba, valid = read_i64_ba_opt table ~column in
+                Int64_option (int64_ba, Valid.bigarray valid)
               with _ ->
                 (* Try reading as optional Double *)
                 try
-                  let double_ba, _valid = read_f64_ba_opt table ~column in
-                  Double_option (double_ba, ())
+                  let double_ba, valid = read_f64_ba_opt table ~column in
+                  Double_option (double_ba, Valid.bigarray valid)
                 with _ ->
                   Unsupported_type
     with _ ->

@@ -144,10 +144,10 @@ module Column : sig
     | String_option of string option array
     | Int64 of (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t
     | Int64_option of
-        (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+        (int64, Bigarray.int64_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.ba
     | Double of (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t
     | Double_option of
-        (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t * unit
+        (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t * Valid.ba
 
   val fast_read : Table.t -> int -> t
 end

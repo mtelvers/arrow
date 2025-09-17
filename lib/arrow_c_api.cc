@@ -250,7 +250,6 @@ struct ArrowArray *table_chunked_column_(TablePtr *table, char *column_name, int
     expected_type_str = "float64";
   }
   else if (dt == 2) {
-    // TODO: also handle large_utf8 here.
     expected_type = arrow::Type::STRING;
     expected_type_str = "utf8";
   }
@@ -302,7 +301,15 @@ struct ArrowArray *table_chunked_column_(TablePtr *table, char *column_name, int
   struct ArrowArray *out = (struct ArrowArray*)malloc(array->num_chunks() * sizeof *out);
   for (int i = 0; i < array->num_chunks(); ++i) {
     auto chunk = array->chunk(i);
-    if (chunk->type()->id() != expected_type && chunk->type()->id() != arrow::Type::NA) {
+    auto chunk_type = chunk->type()->id();
+    bool type_match = (chunk_type == expected_type) || (chunk_type == arrow::Type::NA);
+
+    // Special case: accept LARGE_STRING when expecting STRING (utf8)
+    if (expected_type == arrow::Type::STRING && chunk_type == arrow::Type::LARGE_STRING) {
+      type_match = true;
+    }
+
+    if (!type_match) {
       throw std::invalid_argument(
         std::string("expected type with ") + expected_type_str + " (id "
         + std::to_string(expected_type) + ") got " + chunk->type()->ToString());
