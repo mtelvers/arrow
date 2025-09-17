@@ -1,7 +1,7 @@
 open Arrow2
 
 let test_table_basic () =
-  (* Direct port of Jane Street table test *)
+  (* Test basic table creation with multiple data types and concatenation *)
   let table =
     List.init 3 (fun i ->
         let cols =
@@ -17,7 +17,7 @@ let test_table_basic () =
   let bar = Wrapper.Column.read_int table ~column:(`Name "bar") in
   let baz = Wrapper.Column.read_int_opt table ~column:(`Name "baz") in
 
-  (* Expected outputs exactly as from Jane Street *)
+  (* Expected outputs for concatenated table *)
   let expected_foo = [| "v1"; "v2"; "v3"; "v1"; "v2"; "v3"; "v1"; "v2"; "v3" |] in
   let expected_bar = [| 0; 0; 0; 1; 5; 10; 2; 10; 20 |] in
   let expected_baz = [| Some 1; None; None; Some 3; None; None; Some 5; None; None |] in
@@ -27,7 +27,7 @@ let test_table_basic () =
   Alcotest.(check (array (option int))) "baz column" expected_baz baz
 
 let test_table_with_high_level_api () =
-  (* Port of the second Jane Street table test using Table.col *)
+  (* Test high-level Table.col API with float and optional columns *)
   let table =
     List.init 3 (fun i ->
         let f = Float.of_int i in
@@ -44,7 +44,7 @@ let test_table_with_high_level_api () =
   let bar = Table.read table Table.Float ~column:(`Name "bar") in
   let baz = Table.read_opt table Table.Float ~column:(`Name "baz") in
 
-  (* Expected outputs exactly as from Jane Street *)
+  (* Expected outputs for high-level API test *)
   let expected_foo = [| "v1"; "v2"; "v3"; "v1"; "v2"; "v3"; "v1"; "v2"; "v3" |] in
   let expected_bar = [| 0.0; 0.0; 0.0; 1.0; 5.0; 0.5; 2.0; 10.0; 1.0 |] in
   let expected_baz = [| Some 0.1; None; None; Some 2.1; None; None; Some 4.1; None; None |] in
@@ -54,7 +54,7 @@ let test_table_with_high_level_api () =
   Alcotest.(check (array (option (float 1e-6)))) "baz column" expected_baz baz
 
 let test_table_operations () =
-  (* Test add_column and add_all_columns like Jane Street *)
+  (* Test column manipulation operations: add_column and add_all_columns *)
   let table =
     let cols = [ Table.col [| "v1"; "v2"; "v3" |] Table.Utf8 ~name:"foo" ] in
     Table.create cols

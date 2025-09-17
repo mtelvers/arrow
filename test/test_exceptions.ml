@@ -12,7 +12,7 @@ let test_parquet_file_not_found () =
   let error_msg = catch_and_extract_message (fun () ->
       ignore (Parquet_reader.table "does-not-exist.parquet" : Wrapper.Table.t)) in
 
-  (* Jane Street expects: "IOError: Failed to open local file 'does-not-exist.parquet'. Detail: [errno 2] No such file or directory" *)
+  (* Expected error message for missing parquet file *)
   Alcotest.(check string) "File not found error message"
     "IOError: Failed to open local file 'does-not-exist.parquet'. Detail: [errno 2] No such file or directory"
     error_msg
@@ -25,7 +25,7 @@ let test_empty_parquet_file () =
         ignore (Parquet_reader.table filename : Wrapper.Table.t)) in
     cleanup ();
 
-    (* Jane Street expects: "Invalid: Parquet file size is 0 bytes" *)
+    (* Expected error message for empty parquet file *)
     Alcotest.(check string) "Empty parquet file error message"
       "Invalid: Parquet file size is 0 bytes"
       error_msg
@@ -34,7 +34,7 @@ let test_empty_parquet_file () =
     raise exn
 
 let test_column_errors () =
-  (* Create the same test table as Jane Street *)
+  (* Create test table with multiple column types for error testing *)
   let table =
     List.init 3 (fun i ->
         let cols =
@@ -53,7 +53,7 @@ let test_column_errors () =
       let _col = Wrapper.Column.read_utf8 table ~column:(`Name "foobar") in
       ()) in
 
-  (* Jane Street expects: "cannot find column foobar" *)
+  (* Expected error message for missing column *)
   Alcotest.(check string) "Column not found error message"
     "cannot find column foobar"
     error_msg1;
@@ -63,7 +63,7 @@ let test_column_errors () =
       let _col = Wrapper.Column.read_utf8 table ~column:(`Name "baz") in
       ()) in
 
-  (* Jane Street expects: "expected type with utf8 (id 13) got int64" *)
+  (* Expected error message for column type mismatch *)
   Alcotest.(check string) "Column type mismatch error message"
     "expected type with utf8 (id 13) got int64"
     error_msg2;
@@ -74,7 +74,7 @@ let test_column_errors () =
       let _col = Wrapper.Column.read_utf8 table ~column:(`Index 123) in
       ()) in
 
-  (* Jane Street expects: "invalid column index 123 (ncols: 3)" *)
+  (* Expected error message for invalid column index *)
   Alcotest.(check string) "Invalid column index error message"
     "invalid column index 123 (ncols: 3)"
     error_msg3

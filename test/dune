@@ -1,6 +1,6 @@
 (test
  (name test_performance)
- (libraries arrow2))
+ (libraries arrow2 alcotest))
 
 (test
  (name test_table)

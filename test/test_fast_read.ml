@@ -30,7 +30,7 @@ let check_column msg expected actual =
       Alcotest.fail (Printf.sprintf "%s: Column types don't match" msg)
 
 let test_fast_read_comprehensive () =
-  (* Port of the comprehensive fast_read test from Jane Street *)
+  (* Comprehensive test of fast_read column type detection *)
   let t =
     List.init 12 (fun i ->
         let f = Float.of_int i in

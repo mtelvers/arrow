@@ -219,7 +219,7 @@ module Parquet_reader = struct
     |> Table.with_free
 end
 
-(* Writer module - mirrors Jane Street implementation *)
+(* Writer module for creating Arrow tables from OCaml data *)
 module Writer = struct
   (* Release functions for Arrow C Data Interface *)
   module Release_array_fn_ptr =
@@ -297,7 +297,7 @@ module Writer = struct
     setf a C.ArrowArray.release release_array_ptr;
     a
 
-  (* Helper functions - Jane Street pattern *)
+  (* Helper functions for column creation *)
   let fixed_ba ~format array ~name =
     let buffers = CArray.of_list (ptr void)
         [ null; bigarray_start array1 array |> to_voidp ]
@@ -379,7 +379,7 @@ module Writer = struct
     in
     (array_struct, schema_struct : col)
 
-  (* Real implementations using Jane Street pattern *)
+  (* Column creation implementations *)
   let int array ~name =
     let ba = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length array) in
     Array.iteri (fun i x -> ba.{i} <- Int64.of_int x) array;
