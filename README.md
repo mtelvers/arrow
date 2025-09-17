@@ -2,7 +2,7 @@ This project is entirely derived from
 [LaurentMazare/ocaml-arrow](https://github.com/LaurentMazare/ocaml-arrow).
 
 This is a reimplementation using the OCaml Standard Library and updated to
-[Apache Arrow]((https://arrow.apache.org/) version 20 and C++ 17.
+[Apache Arrow](https://arrow.apache.org/) version 20 and C++ 17.
 
 Some of the `ocaml-arrow` features around PPX have not yet been ported.
 
