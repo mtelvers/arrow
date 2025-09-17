@@ -16,6 +16,7 @@ depends: [
   "ctypes-foreign"
   "dune-configurator"
   "ptime"
+  "alcotest" {with-test}
   "odoc" {with-doc}
 ]
 build: [

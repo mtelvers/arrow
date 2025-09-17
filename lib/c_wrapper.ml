@@ -833,77 +833,6 @@ module Column = struct
           dst
         ))
 
-  let read_int_opt table ~column = 
-    with_column table Int64 ~column ~f:(fun chunks ->
-        let num_rows = num_rows chunks in
-        if num_rows = 0 then [||]
-        else (
-          let dst = Array.make num_rows None in
-          let _num_rows =
-            List.fold_left (fun dst_offset chunk ->
-                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
-                if chunk.null_count = chunk.length then
-                  (* All nulls - dst already initialized with None *)
-                  dst_offset + chunk.length
-                else (
-                  let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
-                  for idx = 0 to chunk.length - 1 do
-                    let value = !@(data +@ idx) |> Int64.to_int in
-                    dst.(dst_offset + idx) <- Some value
-                  done;
-                  dst_offset + chunk.length
-                )) 0 chunks
-          in
-          dst
-        ))
-
-  let read_int32_opt table ~column =
-    with_column table Int32 ~column ~f:(fun chunks ->
-        let num_rows = num_rows chunks in
-        if num_rows = 0 then [||]
-        else (
-          let dst = Array.make num_rows None in
-          let _num_rows =
-            List.fold_left (fun dst_offset chunk ->
-                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
-                if chunk.null_count = chunk.length then
-                  (* All nulls - dst already initialized with None *)
-                  dst_offset + chunk.length
-                else (
-                  let data = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
-                  for idx = 0 to chunk.length - 1 do
-                    let value = !@(data +@ idx) in
-                    dst.(dst_offset + idx) <- Some value
-                  done;
-                  dst_offset + chunk.length
-                )) 0 chunks
-          in
-          dst
-        ))
-
-  let read_float_opt table ~column = 
-    with_column table Float64 ~column ~f:(fun chunks ->
-        let num_rows = num_rows chunks in
-        if num_rows = 0 then [||]
-        else (
-          let dst = Array.make num_rows None in
-          let _num_rows =
-            List.fold_left (fun dst_offset chunk ->
-                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
-                if chunk.null_count = chunk.length then
-                  (* All nulls - dst already initialized with None *)
-                  dst_offset + chunk.length
-                else (
-                  let data = Chunk.primitive_data_ptr chunk ~ctype:double in
-                  for idx = 0 to chunk.length - 1 do
-                    let value = !@(data +@ idx) in
-                    dst.(dst_offset + idx) <- Some value
-                  done;
-                  dst_offset + chunk.length
-                )) 0 chunks
-          in
-          dst
-        ))
 
   let read_utf8_opt table ~column = 
     with_column table Utf8 ~column ~f:(fun chunks ->
@@ -1009,6 +938,26 @@ module Column = struct
                 let dst_sub = Bigarray.Array1.sub dst dst_offset chunk.length in
                 let src = bigarray_of_ptr array1 chunk.length kind ptr in
                 Bigarray.Array1.blit src dst_sub;
+                (* Read validity bitmap if there are null values *)
+                if chunk.null_count <> 0 then (
+                  let valid_ptr =
+                    match chunk.buffers with
+                    | bitmap :: _ -> from_voidp uint8_t bitmap
+                    | _ -> assert false
+                  in
+                  (* Read validity bitmap byte by byte *)
+                  for bidx = 0 to ((chunk.length + 7) / 8) - 1 do
+                    let byte = !@(valid_ptr +@ bidx) |> Unsigned.UInt8.to_int in
+                    if byte <> 255 then (
+                      let max_idx = min 8 (chunk.length - (8 * bidx)) in
+                      let valid_offset = dst_offset + (8 * bidx) in
+                      for idx = 0 to max_idx - 1 do
+                        let v = byte land (1 lsl idx) <> 0 in
+                        Valid.set valid (valid_offset + idx) v
+                      done
+                    )
+                  done
+                );
                 dst_offset + chunk.length
               )) 0 chunks
         in
@@ -1024,6 +973,22 @@ module Column = struct
   let read_i64_ba_opt table ~column = read_ba_opt table ~datatype:Int64 ~kind:Bigarray.int64 ~ctype:int64_t ~column
   let read_f64_ba_opt table ~column = read_ba_opt table ~datatype:Float64 ~kind:Bigarray.float64 ~ctype:double ~column
   let read_f32_ba_opt table ~column = read_ba_opt table ~datatype:Float32 ~kind:Bigarray.float32 ~ctype:float ~column
+
+  (* Fixed null handling functions using validity bitmasks *)
+  let read_int_opt table ~column =
+    let ba, valid = read_i64_ba_opt table ~column in
+    Array.init (Bigarray.Array1.dim ba) (fun i ->
+        if Valid.get valid i then Some (Int64.to_int ba.{i}) else None)
+
+  let read_int32_opt table ~column =
+    let ba, valid = read_i32_ba_opt table ~column in
+    Array.init (Bigarray.Array1.dim ba) (fun i ->
+        if Valid.get valid i then Some ba.{i} else None)
+
+  let read_float_opt table ~column =
+    let ba, valid = read_f64_ba_opt table ~column in
+    Array.init (Bigarray.Array1.dim ba) (fun i ->
+        if Valid.get valid i then Some ba.{i} else None)
 
 
   type t =

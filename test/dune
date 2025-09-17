@@ -1,7 +1,23 @@
 (test
  (name test_arrow)
- (libraries arrow2))
+ (libraries arrow2 alcotest))
 
 (test
  (name test_performance)
  (libraries arrow2))
+
+(test
+ (name test_table)
+ (libraries arrow2 alcotest))
+
+(test
+ (name test_fast_read)
+ (libraries arrow2 alcotest))
+
+(test
+ (name test_builder)
+ (libraries arrow2 alcotest))
+
+(test
+ (name test_bitset)
+ (libraries arrow2 alcotest))

@@ -7,10 +7,13 @@ type t = {
 
 let create len =
   let data = Bigarray.Array1.create Bigarray.int8_unsigned Bigarray.c_layout ((len + 7) / 8) in
-  Bigarray.Array1.fill data 255; (* All bits set to 1 (valid) *)
+  Bigarray.Array1.fill data 0; (* All bits set to 0 (invalid) *)
   { length = len; data }
 
-let create_all_valid = create
+let create_all_valid len =
+  let data = Bigarray.Array1.create Bigarray.int8_unsigned Bigarray.c_layout ((len + 7) / 8) in
+  Bigarray.Array1.fill data 255; (* All bits set to 1 (valid) *)
+  { length = len; data }
 
 let create_ba len =
   let ba = Bigarray.Array1.create Bigarray.int8_unsigned Bigarray.c_layout ((len + 7) / 8) in

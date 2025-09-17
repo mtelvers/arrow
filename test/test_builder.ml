@@ -1,0 +1,139 @@
+open Arrow2
+
+let test_double_builder () =
+  let builder = Builder.Double.create () in
+
+  (* Test basic append *)
+  Builder.Double.append builder 1.5;
+  Builder.Double.append builder 2.7;
+  Builder.Double.append_null builder;
+  Builder.Double.append builder 3.14;
+
+  Alcotest.(check int) "Length after appends" 4 (Builder.Double.length builder);
+  Alcotest.(check int) "Null count" 1 (Builder.Double.null_count builder);
+
+  (* Test append_opt *)
+  Builder.Double.append_opt builder (Some 4.2);
+  Builder.Double.append_opt builder None;
+
+  Alcotest.(check int) "Length after opt appends" 6 (Builder.Double.length builder);
+  Alcotest.(check int) "Null count after opt appends" 2 (Builder.Double.null_count builder)
+
+let test_string_builder () =
+  let builder = Builder.String.create () in
+
+  Builder.String.append builder "hello";
+  Builder.String.append builder "world";
+  Builder.String.append_null builder;
+  Builder.String.append_opt builder (Some "test");
+  Builder.String.append_opt builder None;
+
+  Alcotest.(check int) "String builder length" 5 (Builder.String.length builder);
+  Alcotest.(check int) "String builder null count" 2 (Builder.String.null_count builder)
+
+let test_int_builders () =
+  (* Test NativeInt builder *)
+  let int_builder = Builder.NativeInt.create () in
+  Builder.NativeInt.append int_builder 42;
+  Builder.NativeInt.append int_builder 100;
+  Builder.NativeInt.append_null int_builder;
+
+  Alcotest.(check int) "NativeInt builder length" 3 (Builder.NativeInt.length int_builder);
+  Alcotest.(check int) "NativeInt builder null count" 1 (Builder.NativeInt.null_count int_builder);
+
+  (* Test Int32 builder *)
+  let int32_builder = Builder.Int32.create () in
+  Builder.Int32.append int32_builder 42l;
+  Builder.Int32.append_opt int32_builder (Some 100l);
+  Builder.Int32.append_opt int32_builder None;
+
+  Alcotest.(check int) "Int32 builder length" 3 (Builder.Int32.length int32_builder);
+  Alcotest.(check int) "Int32 builder null count" 1 (Builder.Int32.null_count int32_builder);
+
+  (* Test Int64 builder *)
+  let int64_builder = Builder.Int64.create () in
+  Builder.Int64.append int64_builder 42L;
+  Builder.Int64.append_opt int64_builder None;
+  Builder.Int64.append int64_builder 100L;
+
+  Alcotest.(check int) "Int64 builder length" 3 (Builder.Int64.length int64_builder);
+  Alcotest.(check int) "Int64 builder null count" 1 (Builder.Int64.null_count int64_builder)
+
+type person = { name : string; age : int; height : float option }
+
+let test_row_based_builder () =
+  (* Test row-based table construction *)
+
+  let people = [|
+    { name = "Alice"; age = 30; height = Some 1.65 };
+    { name = "Bob"; age = 25; height = None };
+    { name = "Charlie"; age = 35; height = Some 1.80 };
+  |] in
+
+  let cols =
+    Builder.col ~name:"name" Table.Utf8 (fun p -> p.name) @
+    Builder.col ~name:"age" Table.Int (fun p -> p.age) @
+    Builder.col_opt ~name:"height" Table.Float (fun p -> p.height) in
+
+  let table = Builder.array_to_table cols people in
+
+  (* Verify the table was created correctly *)
+  Alcotest.(check int) "Table rows" 3 (Wrapper.Table.num_rows table);
+
+  let names = Table.read table Table.Utf8 ~column:(`Name "name") in
+  let ages = Table.read table Table.Int ~column:(`Name "age") in
+  let heights = Table.read_opt table Table.Float ~column:(`Name "height") in
+
+  let expected_names = [| "Alice"; "Bob"; "Charlie" |] in
+  let expected_ages = [| 30; 25; 35 |] in
+  let expected_heights = [| Some 1.65; None; Some 1.80 |] in
+
+  Alcotest.(check (array string)) "Names column" expected_names names;
+  Alcotest.(check (array int)) "Ages column" expected_ages ages;
+  Alcotest.(check (array (option (float 1e-6)))) "Heights column" expected_heights heights
+
+let test_row_builder () =
+  (* Test the Row builder module *)
+  type simple_row = { id : int; value : string }
+
+  let module SimpleRow = struct
+    type row = simple_row
+    let array_to_table rows =
+      let cols =
+        Builder.col ~name:"id" Table.Int (fun r -> r.id) @
+        Builder.col ~name:"value" Table.Utf8 (fun r -> r.value) in
+      Builder.array_to_table cols rows
+  end in
+
+  let module SimpleRowBuilder = Builder.Row(SimpleRow) in
+
+  let builder = SimpleRowBuilder.create () in
+  SimpleRowBuilder.append builder { id = 1; value = "first" };
+  SimpleRowBuilder.append builder { id = 2; value = "second" };
+
+  Alcotest.(check int) "Row builder length" 2 (SimpleRowBuilder.length builder);
+
+  let table = SimpleRowBuilder.to_table builder in
+  Alcotest.(check int) "Row builder table rows" 2 (Wrapper.Table.num_rows table);
+
+  let ids = Table.read table Table.Int ~column:(`Name "id") in
+  let values = Table.read table Table.Utf8 ~column:(`Name "value") in
+
+  Alcotest.(check (array int)) "Row builder IDs" [| 1; 2 |] ids;
+  Alcotest.(check (array string)) "Row builder values" [| "first"; "second" |] values;
+
+  (* Test reset *)
+  SimpleRowBuilder.reset builder;
+  Alcotest.(check int) "Row builder length after reset" 0 (SimpleRowBuilder.length builder)
+
+let () =
+  let open Alcotest in
+  run "Builder tests" [
+    "builders", [
+      test_case "Double builder" `Quick test_double_builder;
+      test_case "String builder" `Quick test_string_builder;
+      test_case "Int builders" `Quick test_int_builders;
+      test_case "Row-based builder" `Quick test_row_based_builder;
+      test_case "Row builder module" `Quick test_row_builder;
+    ];
+  ]
