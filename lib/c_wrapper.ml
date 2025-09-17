@@ -223,19 +223,30 @@ end
 module Writer = struct
   (* Release functions for Arrow C Data Interface *)
   module Release_array_fn_ptr =
-    (val Foreign.dynamic_funptr (C.ArrowArray.t @-> returning void))
+    (val Foreign.dynamic_funptr (ptr C.ArrowArray.t @-> returning void))
 
   module Release_schema_fn_ptr =
-    (val Foreign.dynamic_funptr (C.ArrowSchema.t @-> returning void))
+    (val Foreign.dynamic_funptr (ptr C.ArrowSchema.t @-> returning void))
 
-  (* For now release_schema and release_array don't do anything as the
-     memory is entirely managed on the OCaml side. *)
+  (* Proper release callbacks that follow Arrow C Data Interface spec *)
   let release_schema =
-    let release_schema _ = () in
+    let release_schema schema_ptr =
+      (* Check if already released *)
+      if not (is_null (getf (!@schema_ptr) C.ArrowSchema.release)) then (
+        (* Mark as released by setting release to NULL *)
+        setf (!@schema_ptr) C.ArrowSchema.release (null |> from_voidp void)
+      )
+    in
     Release_schema_fn_ptr.of_fun release_schema
 
   let release_array =
-    let release_array _ = () in
+    let release_array array_ptr =
+      (* Check if already released *)
+      if not (is_null (getf (!@array_ptr) C.ArrowArray.release)) then (
+        (* Mark as released by setting release to NULL *)
+        setf (!@array_ptr) C.ArrowArray.release (null |> from_voidp void)
+      )
+    in
     Release_array_fn_ptr.of_fun release_array
 
   (* Keep the function pointers alive to prevent GC *)
@@ -557,23 +568,44 @@ module Writer = struct
     C.Table.parquet_write filename table chunk_size compression
 
   and create_table ~cols =
-    (* Jane Street pattern: Use C Data Interface *)
+    (* Create a proper table with struct schema containing columns as children *)
     let n_cols = List.length cols in
     if n_cols = 0 then
       C.csv_read_table "" |> Table.with_free
-    else if n_cols = 1 then (
-      (* Single column case - use create_table directly *)
-      let (array, schema) = List.hd cols in
-      C.Table.create (addr array) (addr schema) |> Table.with_free
-    ) else (
-      (* Multiple columns - create individual tables and concatenate *)
-      let tables = List.map (fun (array, schema) ->
-        C.Table.create (addr array) (addr schema)
-      ) cols in
-      let tables_array = Array.of_list tables in
-      let ptrs_carray = CArray.of_list C.Table.t (Array.to_list tables_array) in
-      C.Table.concatenate (CArray.start ptrs_carray) (Array.length tables_array)
-      |> Table.with_free
+    else (
+      (* Create arrays and schemas for all columns *)
+      let (arrays, schemas) = List.split cols in
+
+      (* Create child schema array *)
+      let schema_ptrs = List.map addr schemas in
+      let children_schemas = CArray.of_list (ptr C.ArrowSchema.t) schema_ptrs in
+
+      (* Create child array array *)
+      let array_ptrs = List.map addr arrays in
+      let children_arrays = CArray.of_list (ptr C.ArrowArray.t) array_ptrs in
+
+      (* Create table-level struct schema *)
+      let table_schema = schema_struct
+        ~format:"+s"
+        ~name:""
+        ~children:children_schemas
+        ~flag:Schema.Flags.none in
+
+      (* Get length from first array (all should have same length) *)
+      let length = match arrays with
+        | [] -> 0
+        | array :: _ -> getf array C.ArrowArray.length |> Int64.to_int
+      in
+
+      (* Create table-level array struct - struct types need validity buffer *)
+      let table_array = array_struct
+        ~buffers:(CArray.of_list (ptr void) [null])
+        ~children:children_arrays
+        ~null_count:0
+        ~length
+        ~finalise:(fun _ -> ()) in
+
+      C.Table.create (addr table_array) (addr table_schema) |> Table.with_free
     )
 end
 
