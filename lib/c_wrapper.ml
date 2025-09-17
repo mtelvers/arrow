@@ -228,10 +228,22 @@ module Writer = struct
   module Release_schema_fn_ptr =
     (val Foreign.dynamic_funptr (C.ArrowSchema.t @-> returning void))
 
-  let release_schema _ = ()
-  let release_array _ = ()
-  let release_schema_ptr = coerce Release_schema_fn_ptr.t (ptr void) (Release_schema_fn_ptr.of_fun release_schema)
-  let release_array_ptr = coerce Release_array_fn_ptr.t (ptr void) (Release_array_fn_ptr.of_fun release_array)
+  (* For now release_schema and release_array don't do anything as the
+     memory is entirely managed on the OCaml side. *)
+  let release_schema =
+    let release_schema _ = () in
+    Release_schema_fn_ptr.of_fun release_schema
+
+  let release_array =
+    let release_array _ = () in
+    Release_array_fn_ptr.of_fun release_array
+
+  (* Keep the function pointers alive to prevent GC *)
+  let keep_alive_internal = ref []
+  let () = keep_alive_internal := [Obj.repr release_schema; Obj.repr release_array]
+
+  let release_array_ptr = coerce Release_array_fn_ptr.t (ptr void) release_array
+  let release_schema_ptr = coerce Release_schema_fn_ptr.t (ptr void) release_schema
 
   let empty_schema_l = CArray.of_list (ptr C.ArrowSchema.t) []
   let empty_array_l = CArray.of_list (ptr C.ArrowArray.t) []
