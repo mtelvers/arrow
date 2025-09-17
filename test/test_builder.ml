@@ -92,9 +92,10 @@ let test_row_based_builder () =
   Alcotest.(check (array int)) "Ages column" expected_ages ages;
   Alcotest.(check (array (option (float 1e-6)))) "Heights column" expected_heights heights
 
+type simple_row = { id : int; value : string }
+
 let test_row_builder () =
   (* Test the Row builder module *)
-  type simple_row = { id : int; value : string }
 
   let module SimpleRow = struct
     type row = simple_row

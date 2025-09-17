@@ -848,19 +848,36 @@ module Column = struct
                   dst_offset + chunk.length
                 else (
                   let offsets = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
-                  let data =
+                  let valid, data =
                     match chunk.buffers with
-                    | [ _; _; data ] -> from_voidp char data
+                    | [ valid; _; data ] ->
+                        let valid =
+                          if is_null valid then None
+                          else Some (from_voidp uint8_t valid)
+                        in
+                        valid, from_voidp char data
                     | _ -> failwith "expected 3 buffers for utf8"
                   in
                   for idx = 0 to chunk.length - 1 do
-                    let str_offset = !@(offsets +@ idx) |> Int32.to_int in
-                    let next_str_offset = !@(offsets +@ (idx + 1)) |> Int32.to_int in
-                    let str =
-                      string_from_ptr (data +@ str_offset)
-                        ~length:(next_str_offset - str_offset)
+                    let is_valid =
+                      if chunk.null_count = 0 then true
+                      else (
+                        match valid with
+                        | None -> true
+                        | Some valid ->
+                            let b = !@(valid +@ (idx / 8)) |> Unsigned.UInt8.to_int in
+                            b land (1 lsl (idx land 0b111)) <> 0
+                      )
                     in
-                    dst.(dst_offset + idx) <- Some str
+                    if is_valid then (
+                      let str_offset = !@(offsets +@ idx) |> Int32.to_int in
+                      let next_str_offset = !@(offsets +@ (idx + 1)) |> Int32.to_int in
+                      let str =
+                        string_from_ptr (data +@ str_offset)
+                          ~length:(next_str_offset - str_offset)
+                      in
+                      dst.(dst_offset + idx) <- Some str
+                    )
                   done;
                   dst_offset + chunk.length
                 )) 0 chunks
@@ -877,7 +894,7 @@ module Column = struct
           let dst = Array.make num_rows "" in
           let _num_rows =
             List.fold_left (fun dst_offset chunk ->
-                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
                 (* Arrow UTF8 format:
                    - Buffer 0: validity bitmap (optional) 
                    - Buffer 1: offsets array (int32)
@@ -1089,9 +1106,28 @@ module Column = struct
                   dst_offset + chunk.length
                 else (
                   let data = Chunk.primitive_data_ptr chunk ~ctype:int32_t in
+                  let valid =
+                    if chunk.null_count = 0 then None
+                    else (
+                      match chunk.buffers with
+                      | valid :: _ ->
+                          if is_null valid then None
+                          else Some (from_voidp uint8_t valid)
+                      | _ -> None
+                    )
+                  in
                   for idx = 0 to chunk.length - 1 do
-                    let days = !@(data +@ idx) |> Int32.to_int in
-                    dst.(dst_offset + idx) <- Some (Datetime.Date.of_unix_days days)
+                    let is_valid =
+                      match valid with
+                      | None -> true
+                      | Some valid ->
+                          let b = !@(valid +@ (idx / 8)) |> Unsigned.UInt8.to_int in
+                          b land (1 lsl (idx land 0b111)) <> 0
+                    in
+                    if is_valid then (
+                      let days = !@(data +@ idx) |> Int32.to_int in
+                      dst.(dst_offset + idx) <- Some (Datetime.Date.of_unix_days days)
+                    )
                   done;
                   dst_offset + chunk.length
                 )) 0 chunks
@@ -1112,9 +1148,28 @@ module Column = struct
                   dst_offset + chunk.length
                 else (
                   let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  let valid =
+                    if chunk.null_count = 0 then None
+                    else (
+                      match chunk.buffers with
+                      | valid :: _ ->
+                          if is_null valid then None
+                          else Some (from_voidp uint8_t valid)
+                      | _ -> None
+                    )
+                  in
                   for idx = 0 to chunk.length - 1 do
-                    let ns = !@(data +@ idx) in
-                    dst.(dst_offset + idx) <- Some (Datetime.Time_ns.of_int64_ns_since_epoch ns)
+                    let is_valid =
+                      match valid with
+                      | None -> true
+                      | Some valid ->
+                          let b = !@(valid +@ (idx / 8)) |> Unsigned.UInt8.to_int in
+                          b land (1 lsl (idx land 0b111)) <> 0
+                    in
+                    if is_valid then (
+                      let ns = !@(data +@ idx) in
+                      dst.(dst_offset + idx) <- Some (Datetime.Time_ns.of_int64_ns_since_epoch ns)
+                    )
                   done;
                   dst_offset + chunk.length
                 )) 0 chunks
@@ -1135,9 +1190,28 @@ module Column = struct
                   dst_offset + chunk.length
                 else (
                   let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  let valid =
+                    if chunk.null_count = 0 then None
+                    else (
+                      match chunk.buffers with
+                      | valid :: _ ->
+                          if is_null valid then None
+                          else Some (from_voidp uint8_t valid)
+                      | _ -> None
+                    )
+                  in
                   for idx = 0 to chunk.length - 1 do
-                    let ns = !@(data +@ idx) in
-                    dst.(dst_offset + idx) <- Some (Datetime.Time_ns.Span.of_ns ns)
+                    let is_valid =
+                      match valid with
+                      | None -> true
+                      | Some valid ->
+                          let b = !@(valid +@ (idx / 8)) |> Unsigned.UInt8.to_int in
+                          b land (1 lsl (idx land 0b111)) <> 0
+                    in
+                    if is_valid then (
+                      let ns = !@(data +@ idx) in
+                      dst.(dst_offset + idx) <- Some (Datetime.Time_ns.Span.of_ns ns)
+                    )
                   done;
                   dst_offset + chunk.length
                 )) 0 chunks
@@ -1158,9 +1232,28 @@ module Column = struct
                   dst_offset + chunk.length
                 else (
                   let data = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  let valid =
+                    if chunk.null_count = 0 then None
+                    else (
+                      match chunk.buffers with
+                      | valid :: _ ->
+                          if is_null valid then None
+                          else Some (from_voidp uint8_t valid)
+                      | _ -> None
+                    )
+                  in
                   for idx = 0 to chunk.length - 1 do
-                    let ns = !@(data +@ idx) in
-                    dst.(dst_offset + idx) <- Some (Datetime.Time_ns.Ofday.of_ns_since_midnight ns)
+                    let is_valid =
+                      match valid with
+                      | None -> true
+                      | Some valid ->
+                          let b = !@(valid +@ (idx / 8)) |> Unsigned.UInt8.to_int in
+                          b land (1 lsl (idx land 0b111)) <> 0
+                    in
+                    if is_valid then (
+                      let ns = !@(data +@ idx) in
+                      dst.(dst_offset + idx) <- Some (Datetime.Time_ns.Ofday.of_ns_since_midnight ns)
+                    )
                   done;
                   dst_offset + chunk.length
                 )) 0 chunks
@@ -1208,13 +1301,32 @@ module Column = struct
                 for bidx = 0 to ((chunk.length + 7) / 8) - 1 do
                   let byte = !@(ptr_ +@ bidx) |> Unsigned.UInt8.to_int in
                   let max_idx = min 8 (chunk.length - (8 * bidx)) in
-                  for bit_idx = 0 to max_idx - 1 do
-                    let global_idx = dst_offset + (8 * bidx) + bit_idx in
-                    let bit_value = (byte lsr bit_idx) land 1 = 1 in
-                    Valid.set bitset global_idx bit_value;
-                    Valid.set valid global_idx true
+                  let valid_offset = dst_offset + (8 * bidx) in
+                  for idx = 0 to max_idx - 1 do
+                    let v = byte land (1 lsl idx) <> 0 in
+                    Valid.set bitset (valid_offset + idx) v
                   done
                 done;
+                (* Read validity bitmap if there are null values *)
+                if chunk.null_count <> 0 then (
+                  let valid_ptr =
+                    match chunk.buffers with
+                    | bitmap :: _ -> from_voidp uint8_t bitmap
+                    | _ -> assert false
+                  in
+                  (* Read validity bitmap byte by byte *)
+                  for bidx = 0 to ((chunk.length + 7) / 8) - 1 do
+                    let byte = !@(valid_ptr +@ bidx) |> Unsigned.UInt8.to_int in
+                    if byte <> 255 then (
+                      let max_idx = min 8 (chunk.length - (8 * bidx)) in
+                      let valid_offset = dst_offset + (8 * bidx) in
+                      for idx = 0 to max_idx - 1 do
+                        let v = byte land (1 lsl idx) <> 0 in
+                        Valid.set valid (valid_offset + idx) v
+                      done
+                    )
+                  done
+                );
                 dst_offset + chunk.length
               )) 0 chunks
         in

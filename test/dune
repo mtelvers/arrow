@@ -1,8 +1,4 @@
 (test
- (name test_arrow)
- (libraries arrow2 alcotest))
-
-(test
  (name test_performance)
  (libraries arrow2))
 
