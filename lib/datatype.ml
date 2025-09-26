@@ -21,16 +21,16 @@ type t =
       ; scale : int
       }
   | Fixed_width_binary of { bytes : int }
-  | Date32 of [ `days ]
-  | Date64 of [ `milliseconds ]
-  | Time32 of [ `seconds | `milliseconds ]
-  | Time64 of [ `microseconds | `nanoseconds ]
+  | Date32 of [ `Days ]
+  | Date64 of [ `Milliseconds ]
+  | Time32 of [ `Seconds | `Milliseconds ]
+  | Time64 of [ `Microseconds | `Nanoseconds ]
   | Timestamp of
-      { precision : [ `seconds | `milliseconds | `microseconds | `nanoseconds ]
+      { precision : [ `Seconds | `Milliseconds | `Microseconds | `Nanoseconds ]
       ; timezone : string
       }
-  | Duration of [ `seconds | `milliseconds | `microseconds | `nanoseconds ]
-  | Interval of [ `months | `days_time ]
+  | Duration of [ `Seconds | `Milliseconds | `Microseconds | `Nanoseconds ]
+  | Interval of [ `Months | `Days_time ]
   | Struct
   | Map
   | Unknown of string
@@ -53,26 +53,26 @@ let of_cstring = function
   | "Z" -> Large_binary
   | "u" -> Utf8_string
   | "U" -> Large_utf8_string
-  | "tdD" -> Date32 `days
-  | "tdm" -> Date64 `milliseconds
-  | "tts" -> Time32 `seconds
-  | "ttm" -> Time32 `milliseconds
-  | "ttu" -> Time64 `microseconds
-  | "ttn" -> Time64 `nanoseconds
-  | "tDs" -> Duration `seconds
-  | "tDm" -> Duration `milliseconds
-  | "tDu" -> Duration `microseconds
-  | "tDn" -> Duration `nanoseconds
-  | "tiM" -> Interval `months
-  | "tiD" -> Interval `days_time
+  | "tdD" -> Date32 `Days
+  | "tdm" -> Date64 `Milliseconds
+  | "tts" -> Time32 `Seconds
+  | "ttm" -> Time32 `Milliseconds
+  | "ttu" -> Time64 `Microseconds
+  | "ttn" -> Time64 `Nanoseconds
+  | "tDs" -> Duration `Seconds
+  | "tDm" -> Duration `Milliseconds
+  | "tDu" -> Duration `Microseconds
+  | "tDn" -> Duration `Nanoseconds
+  | "tiM" -> Interval `Months
+  | "tiD" -> Interval `Days_time
   | "+s" -> Struct
   | "+m" -> Map
   | unknown ->
     (match String.split_on_char ':' unknown with
-    | [ "tss"; timezone ] -> Timestamp { precision = `seconds; timezone }
-    | [ "tsm"; timezone ] -> Timestamp { precision = `milliseconds; timezone }
-    | [ "tsu"; timezone ] -> Timestamp { precision = `microseconds; timezone }
-    | [ "tsn"; timezone ] -> Timestamp { precision = `nanoseconds; timezone }
+    | [ "tss"; timezone ] -> Timestamp { precision = `Seconds; timezone }
+    | [ "tsm"; timezone ] -> Timestamp { precision = `Milliseconds; timezone }
+    | [ "tsu"; timezone ] -> Timestamp { precision = `Microseconds; timezone }
+    | [ "tsn"; timezone ] -> Timestamp { precision = `Nanoseconds; timezone }
     | [ "w"; bytes ] ->
       (match int_of_string bytes with
       | bytes -> Fixed_width_binary { bytes }

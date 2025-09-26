@@ -13,7 +13,7 @@
  (name arrow)
  (modules arrow builder c_api c_wrapper compression datatype datetime
           file_reader parquet_reader table valid wrapper bindings bindings_generated)
- (libraries ctypes ctypes.foreign ptime arrow.stubs arrow.bindings)
+ (libraries ctypes ctypes-foreign ptime arrow.bindings)
  (private_modules c_wrapper bindings_generated)
  (foreign_stubs
   (language c)

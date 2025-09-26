@@ -653,16 +653,212 @@ end
 
 module StringBuilder = struct
   type t = C.StringBuilder.t
-  
-  let create () = 
+
+  let create () =
     let builder = C.StringBuilder.create () in
     Gc.finalise C.StringBuilder.free builder;
     builder
-    
+
   let append t value = C.StringBuilder.append t value
   let append_null ?(n=1) t = C.StringBuilder.append_null t n
   let length t = C.StringBuilder.length t
   let null_count t = C.StringBuilder.null_count t
+end
+
+module Int8Builder = struct
+  type t = C.Int8Builder.t
+
+  let create () =
+    let builder = C.Int8Builder.create () in
+    Gc.finalise C.Int8Builder.free builder;
+    builder
+
+  let append t value = C.Int8Builder.append t value
+  let append_null ?(n=1) t = C.Int8Builder.append_null t n
+  let length t = C.Int8Builder.length t
+  let null_count t = C.Int8Builder.null_count t
+end
+
+module Int16Builder = struct
+  type t = C.Int16Builder.t
+
+  let create () =
+    let builder = C.Int16Builder.create () in
+    Gc.finalise C.Int16Builder.free builder;
+    builder
+
+  let append t value = C.Int16Builder.append t value
+  let append_null ?(n=1) t = C.Int16Builder.append_null t n
+  let length t = C.Int16Builder.length t
+  let null_count t = C.Int16Builder.null_count t
+end
+
+module UInt8Builder = struct
+  type t = C.UInt8Builder.t
+
+  let create () =
+    let builder = C.UInt8Builder.create () in
+    Gc.finalise C.UInt8Builder.free builder;
+    builder
+
+  let append t value = C.UInt8Builder.append t value
+  let append_null ?(n=1) t = C.UInt8Builder.append_null t n
+  let length t = C.UInt8Builder.length t
+  let null_count t = C.UInt8Builder.null_count t
+end
+
+module UInt16Builder = struct
+  type t = C.UInt16Builder.t
+
+  let create () =
+    let builder = C.UInt16Builder.create () in
+    Gc.finalise C.UInt16Builder.free builder;
+    builder
+
+  let append t value = C.UInt16Builder.append t value
+  let append_null ?(n=1) t = C.UInt16Builder.append_null t n
+  let length t = C.UInt16Builder.length t
+  let null_count t = C.UInt16Builder.null_count t
+end
+
+module UInt32Builder = struct
+  type t = C.UInt32Builder.t
+
+  let create () =
+    let builder = C.UInt32Builder.create () in
+    Gc.finalise C.UInt32Builder.free builder;
+    builder
+
+  let append t value = C.UInt32Builder.append t value
+  let append_null ?(n=1) t = C.UInt32Builder.append_null t n
+  let length t = C.UInt32Builder.length t
+  let null_count t = C.UInt32Builder.null_count t
+end
+
+module UInt64Builder = struct
+  type t = C.UInt64Builder.t
+
+  let create () =
+    let builder = C.UInt64Builder.create () in
+    Gc.finalise C.UInt64Builder.free builder;
+    builder
+
+  let append t value = C.UInt64Builder.append t value
+  let append_null ?(n=1) t = C.UInt64Builder.append_null t n
+  let length t = C.UInt64Builder.length t
+  let null_count t = C.UInt64Builder.null_count t
+end
+
+module FloatBuilder = struct
+  type t = C.FloatBuilder.t
+
+  let create () =
+    let builder = C.FloatBuilder.create () in
+    Gc.finalise C.FloatBuilder.free builder;
+    builder
+
+  let append t value = C.FloatBuilder.append t value
+  let append_null ?(n=1) t = C.FloatBuilder.append_null t n
+  let length t = C.FloatBuilder.length t
+  let null_count t = C.FloatBuilder.null_count t
+end
+
+module BooleanBuilder = struct
+  type t = C.BooleanBuilder.t
+
+  let create () =
+    let builder = C.BooleanBuilder.create () in
+    Gc.finalise C.BooleanBuilder.free builder;
+    builder
+
+  let append t value = C.BooleanBuilder.append t (if value then 1 else 0)
+  let append_null ?(n=1) t = C.BooleanBuilder.append_null t n
+  let length t = C.BooleanBuilder.length t
+  let null_count t = C.BooleanBuilder.null_count t
+end
+
+module Date32Builder = struct
+  type t = C.Date32Builder.t
+
+  let create () =
+    let builder = C.Date32Builder.create () in
+    Gc.finalise C.Date32Builder.free builder;
+    builder
+
+  let append t value = C.Date32Builder.append t value
+  let append_null ?(n=1) t = C.Date32Builder.append_null t n
+  let length t = C.Date32Builder.length t
+  let null_count t = C.Date32Builder.null_count t
+end
+
+module Date64Builder = struct
+  type t = C.Date64Builder.t
+
+  let create () =
+    let builder = C.Date64Builder.create () in
+    Gc.finalise C.Date64Builder.free builder;
+    builder
+
+  let append t value = C.Date64Builder.append t value
+  let append_null ?(n=1) t = C.Date64Builder.append_null t n
+  let length t = C.Date64Builder.length t
+  let null_count t = C.Date64Builder.null_count t
+end
+
+module Time32Builder = struct
+  type t = C.Time32Builder.t
+
+  let create ?(unit=0) () =
+    let builder = C.Time32Builder.create unit in
+    Gc.finalise C.Time32Builder.free builder;
+    builder
+
+  let append t value = C.Time32Builder.append t value
+  let append_null ?(n=1) t = C.Time32Builder.append_null t n
+  let length t = C.Time32Builder.length t
+  let null_count t = C.Time32Builder.null_count t
+end
+
+module Time64Builder = struct
+  type t = C.Time64Builder.t
+
+  let create ?(unit=0) () =
+    let builder = C.Time64Builder.create unit in
+    Gc.finalise C.Time64Builder.free builder;
+    builder
+
+  let append t value = C.Time64Builder.append t value
+  let append_null ?(n=1) t = C.Time64Builder.append_null t n
+  let length t = C.Time64Builder.length t
+  let null_count t = C.Time64Builder.null_count t
+end
+
+module TimestampBuilder = struct
+  type t = C.TimestampBuilder.t
+
+  let create ?(unit=3) ?(timezone="") () =
+    let builder = C.TimestampBuilder.create unit timezone in
+    Gc.finalise C.TimestampBuilder.free builder;
+    builder
+
+  let append t value = C.TimestampBuilder.append t value
+  let append_null ?(n=1) t = C.TimestampBuilder.append_null t n
+  let length t = C.TimestampBuilder.length t
+  let null_count t = C.TimestampBuilder.null_count t
+end
+
+module DurationBuilder = struct
+  type t = C.DurationBuilder.t
+
+  let create ?(unit=3) () =
+    let builder = C.DurationBuilder.create unit in
+    Gc.finalise C.DurationBuilder.free builder;
+    builder
+
+  let append t value = C.DurationBuilder.append t value
+  let append_null ?(n=1) t = C.DurationBuilder.append_null t n
+  let length t = C.DurationBuilder.length t
+  let null_count t = C.DurationBuilder.null_count t
 end
 
 module Builder = struct

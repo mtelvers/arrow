@@ -33,8 +33,8 @@ let column_names_to_indexes col_names schema =
 
 let indexes columns ~filename =
   match columns with
-  | `indexes indexes -> indexes
-  | `names col_names ->
+  | `Indexes indexes -> indexes
+  | `Names col_names ->
     let schema = schema filename in
     column_names_to_indexes col_names schema
 

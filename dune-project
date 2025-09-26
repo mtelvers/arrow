@@ -7,9 +7,9 @@
 (source
  (github mtelvers/arrow))
 
-(authors "Author Name <author@example.com>")
+(authors "Laurent Mazare")
 
-(maintainers "Maintainer Name <maintainer@example.com>")
+(maintainers "Mark Elvers" "Anil Madhavapeddy")
 
 (license LICENSE)
 
@@ -17,8 +17,8 @@
 
 (package
  (name arrow)
- (synopsis "OCaml bindings for Apache Arrow")
- (description "OCaml bindings for Apache Arrow using standard OCaml libraries")
+ (synopsis "Bindings for Apache Arrow and Parquet")
+ (description "OCaml bindings for Apache Arrow and the Parquet file format")
  (depends
   ocaml
   dune
@@ -26,8 +26,4 @@
   ctypes-foreign
   dune-configurator
   ptime
-  (alcotest :with-test))
- (tags
-  ("arrow" "parquet" "data" "analytics")))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+  (alcotest :with-test)))
