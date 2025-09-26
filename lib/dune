@@ -1,16 +1,29 @@
+(executable
+ (name discover)
+ (modules discover)
+ (libraries dune-configurator))
+
+(rule
+ (targets c_flags.sexp c_library_flags.sexp)
+ (deps (:discover discover.exe))
+ (action (run %{discover})))
+
 (library
  (public_name arrow)
  (name arrow)
+ (modules arrow builder c_api c_wrapper compression datatype datetime
+          file_reader parquet_reader table valid wrapper bindings bindings_generated)
  (libraries ctypes ctypes.foreign ptime arrow.stubs arrow.bindings)
  (private_modules c_wrapper bindings_generated)
  (foreign_stubs
   (language c)
-  (names arrow_c_api_stubs))
+  (names arrow_c_api_stubs)
+  (flags (:include c_flags.sexp)))
  (foreign_stubs
   (language cxx)
   (names arrow_c_api)
-  (flags -fPIC -std=c++17))
- (c_library_flags :standard -larrow -lparquet -lstdc++))
+  (flags :standard -std=c++17 (:include c_flags.sexp)))
+ (c_library_flags (:include c_library_flags.sexp)))
 
 (rule
  (targets bindings.ml)
