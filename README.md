@@ -29,3 +29,6 @@ Then create a switch and build the project.
 opam switch create . 5.3.0 --deps-only --with-test
 dune build
 ```
+
+For extra tests, do `git clone https://github.com/apache/parquet-testing
+test/test-data` and all the test data will be parsed using this library.
