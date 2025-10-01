@@ -92,3 +92,8 @@ Update library cache
 ```sh
 sudo ldconfig
 ```
+
+# Tests
+
+For extra tests, do `git clone https://github.com/apache/parquet-testing
+test/test-data` and all the test data will be parsed using this library.

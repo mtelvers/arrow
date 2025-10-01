@@ -16,6 +16,7 @@
 #include "arrow_c_api.h"
 
 #include<iostream>
+#include<cstring>
 
 #include<caml/bigarray.h>
 #include<caml/mlvalues.h>
@@ -66,7 +67,7 @@ void status_exn(arrow::Status &st) {
   }
 }
 
-struct ArrowSchema *arrow_schema(char *filename) {
+struct ArrowSchema *arrow_schema(const char *filename) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   auto file = arrow::io::ReadableFile::Open(filename, arrow::default_memory_pool());
@@ -82,7 +83,7 @@ struct ArrowSchema *arrow_schema(char *filename) {
   return nullptr;
 }
 
-struct ArrowSchema *feather_schema(char *filename) {
+struct ArrowSchema *feather_schema(const char *filename) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   auto file = arrow::io::ReadableFile::Open(filename, arrow::default_memory_pool());
@@ -98,7 +99,7 @@ struct ArrowSchema *feather_schema(char *filename) {
   return nullptr;
 }
 
-struct ArrowSchema *parquet_schema(char *filename, int64_t *num_rows) {
+struct ArrowSchema *parquet_schema(const char *filename, int64_t *num_rows) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   arrow::Status st;
@@ -134,7 +135,7 @@ void check_column_idx(int column_idx, int n_cols) {
   }
 }
 
-int timestamp_unit_in_ns(TablePtr *table, char *column_name, int column_idx) {
+int timestamp_unit_in_ns(TablePtr *table, const char *column_name, int column_idx) {
   int n_cols = (*table)->num_columns();
   if (column_idx >= n_cols) check_column_idx(column_idx, n_cols);
 
@@ -168,7 +169,7 @@ int timestamp_unit_in_ns(TablePtr *table, char *column_name, int column_idx) {
   return -1;
 }
 
-int time64_unit_in_ns(TablePtr *table, char *column_name, int column_idx) {
+int time64_unit_in_ns(TablePtr *table, const char *column_name, int column_idx) {
   int n_cols = (*table)->num_columns();
   if (column_idx >= n_cols) check_column_idx(column_idx, n_cols);
 
@@ -202,7 +203,7 @@ int time64_unit_in_ns(TablePtr *table, char *column_name, int column_idx) {
   return -1;
 }
 
-int duration_unit_in_ns(TablePtr *table, char *column_name, int column_idx) {
+int duration_unit_in_ns(TablePtr *table, const char *column_name, int column_idx) {
   int n_cols = (*table)->num_columns();
   if (column_idx >= n_cols) check_column_idx(column_idx, n_cols);
 
@@ -236,7 +237,7 @@ int duration_unit_in_ns(TablePtr *table, char *column_name, int column_idx) {
   return -1;
 }
 
-struct ArrowArray *table_chunked_column_(TablePtr *table, char *column_name, int column_idx, int *nchunks, int dt) {
+struct ArrowArray *table_chunked_column_(TablePtr *table, const char *column_name, int column_idx, int *nchunks, int dt) {
   OCAML_BEGIN_PROTECT_EXN
 
   arrow::Type::type expected_type;
@@ -329,7 +330,7 @@ struct ArrowArray *table_chunked_column(TablePtr *table, int column_idx, int *nc
   return table_chunked_column_(table, NULL, column_idx, nchunks, dt);
 }
 
-struct ArrowArray *table_chunked_column_by_name(TablePtr *table, char *col_name, int *nchunks, int dt) {
+struct ArrowArray *table_chunked_column_by_name(TablePtr *table, const char *col_name, int *nchunks, int dt) {
   return table_chunked_column_(table, col_name, 0, nchunks, dt);
 }
 
@@ -357,7 +358,7 @@ TablePtr *table_add_all_columns(TablePtr* t1, TablePtr* t2) {
   return nullptr;
 }
 
-TablePtr *table_add_column(TablePtr* t, char* col_name, ChunkedArrayPtr* array) {
+TablePtr *table_add_column(TablePtr* t, const char* col_name, ChunkedArrayPtr* array) {
   OCAML_BEGIN_PROTECT_EXN
 
   auto field = arrow::field(col_name, (*array)->type());
@@ -368,7 +369,7 @@ TablePtr *table_add_column(TablePtr* t, char* col_name, ChunkedArrayPtr* array) 
   return nullptr;
 }
 
-ChunkedArrayPtr *table_get_column(TablePtr* t, char* col_name) {
+ChunkedArrayPtr *table_get_column(TablePtr* t, const char* col_name) {
   OCAML_BEGIN_PROTECT_EXN
 
   auto array = (*t)->GetColumnByName(std::string(col_name));
@@ -403,13 +404,13 @@ TablePtr *create_table(struct ArrowArray *array, struct ArrowSchema *schema) {
 
   auto record_batch = arrow::ImportRecordBatch(array, schema);
   auto table = arrow::Table::FromRecordBatches({ok_exn(record_batch)});
-  return new std::shared_ptr<arrow::Table>(std::move(ok_exn(table)));
+  return new std::shared_ptr<arrow::Table>(ok_exn(table));
 
   OCAML_END_PROTECT_EXN
   return nullptr;
 }
 
-void parquet_write_file(char *filename, struct ArrowArray *array, struct ArrowSchema *schema, int chunk_size, int compression) {
+void parquet_write_file(const char *filename, struct ArrowArray *array, struct ArrowSchema *schema, int chunk_size, int compression) {
   // It is important for this shared pointer to only go out of scope after getting
   // the ocaml lock back as the table release can use ocaml callbacks defined in
   // [schema]/[array].
@@ -419,7 +420,7 @@ void parquet_write_file(char *filename, struct ArrowArray *array, struct ArrowSc
   auto outfile = ok_exn(file);
   auto record_batch = arrow::ImportRecordBatch(array, schema);
   auto table_ = arrow::Table::FromRecordBatches({ok_exn(record_batch)});
-  table = std::move(ok_exn(table_));
+  table = ok_exn(table_);
   {
     caml_lock_guard lock;
     arrow::Compression::type compression_ = compression_of_int(compression);
@@ -434,7 +435,7 @@ void parquet_write_file(char *filename, struct ArrowArray *array, struct ArrowSc
   OCAML_END_PROTECT_EXN
 }
 
-void arrow_write_file(char *filename, struct ArrowArray *array, struct ArrowSchema *schema, int chunk_size) {
+void arrow_write_file(const char *filename, struct ArrowArray *array, struct ArrowSchema *schema, int chunk_size) {
   std::shared_ptr<arrow::Table> table;
   OCAML_BEGIN_PROTECT_EXN
 
@@ -442,7 +443,7 @@ void arrow_write_file(char *filename, struct ArrowArray *array, struct ArrowSche
   auto outfile = ok_exn(file);
   auto record_batch = arrow::ImportRecordBatch(array, schema);
   auto table_ = arrow::Table::FromRecordBatches({ok_exn(record_batch)});
-  table = std::move(ok_exn(table_));
+  table = ok_exn(table_);
   auto batch_writer = arrow::ipc::MakeFileWriter(&(*outfile), table->schema());
   {
     caml_lock_guard lock;
@@ -453,7 +454,7 @@ void arrow_write_file(char *filename, struct ArrowArray *array, struct ArrowSche
   OCAML_END_PROTECT_EXN
 }
 
-void feather_write_file(char *filename, struct ArrowArray *array, struct ArrowSchema *schema, int chunk_size, int compression) {
+void feather_write_file(const char *filename, struct ArrowArray *array, struct ArrowSchema *schema, int chunk_size, int compression) {
   std::shared_ptr<arrow::Table> table;
   OCAML_BEGIN_PROTECT_EXN
 
@@ -461,7 +462,7 @@ void feather_write_file(char *filename, struct ArrowArray *array, struct ArrowSc
   auto outfile = ok_exn(file);
   auto record_batch = arrow::ImportRecordBatch(array, schema);
   auto table_ = arrow::Table::FromRecordBatches({ok_exn(record_batch)});
-  table = std::move(ok_exn(table_));
+  table = ok_exn(table_);
   struct arrow::ipc::feather::WriteProperties wp;
   wp.compression = compression_of_int(compression);
   wp.chunksize = chunk_size;
@@ -474,7 +475,7 @@ void feather_write_file(char *filename, struct ArrowArray *array, struct ArrowSc
   OCAML_END_PROTECT_EXN
 }
 
-void parquet_write_table(char *filename, TablePtr *table, int chunk_size, int compression) {
+void parquet_write_table(const char *filename, TablePtr *table, int chunk_size, int compression) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   auto file = arrow::io::FileOutputStream::Open(filename);
@@ -490,7 +491,7 @@ void parquet_write_table(char *filename, TablePtr *table, int chunk_size, int co
   OCAML_END_PROTECT_EXN
 }
 
-void feather_write_table(char *filename, TablePtr *table, int chunk_size, int compression) {
+void feather_write_table(const char *filename, TablePtr *table, int chunk_size, int compression) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   auto file = arrow::io::FileOutputStream::Open(filename);
@@ -504,7 +505,7 @@ void feather_write_table(char *filename, TablePtr *table, int chunk_size, int co
   OCAML_END_PROTECT_EXN
 }
 
-ParquetReader *parquet_reader_open(char *filename, int *col_idxs, int ncols, int use_threads, int mmap, int buffer_size, int batch_size) {
+ParquetReader *parquet_reader_open(const char *filename, int *col_idxs, int ncols, int use_threads, int mmap, int buffer_size, int batch_size) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   arrow::Status st;
@@ -551,8 +552,8 @@ TablePtr *parquet_reader_next(ParquetReader *pr) {
     return nullptr;
   }
   auto table_ = arrow::Table::FromRecordBatches({batch});
-  std::shared_ptr<arrow::Table> table = std::move(ok_exn(table_));
-  return new std::shared_ptr<arrow::Table>(std::move(table));
+  std::shared_ptr<arrow::Table> table = ok_exn(table_);
+  return new std::shared_ptr<arrow::Table>(table);
 
   OCAML_END_PROTECT_EXN
   return nullptr;
@@ -567,7 +568,7 @@ void parquet_reader_free(ParquetReader *pr) {
   delete pr;
 }
 
-TablePtr *parquet_read_table(char *filename, int *col_idxs, int ncols, int use_threads, int64_t only_first) {
+TablePtr *parquet_read_table(const char *filename, int *col_idxs, int ncols, int use_threads, int64_t only_first) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   arrow::Status st;
@@ -600,28 +601,28 @@ TablePtr *parquet_read_table(char *filename, int *col_idxs, int ncols, int use_t
         status_exn(st);
         if (batch == nullptr) break;
         if (only_first <= batch->num_rows()) {
-          batches.push_back(std::move(batch->Slice(0, only_first)));
+          batches.push_back(batch->Slice(0, only_first));
           only_first = 0;
           break;
         }
         else {
           only_first -= batch->num_rows();
-          batches.push_back(std::move(batch));
+          batches.push_back(batch);
         }
       }
       if (only_first <= 0)
         break;
     }
     auto table_ = arrow::Table::FromRecordBatches(batches);
-    table = std::move(ok_exn(table_));
+    table = ok_exn(table_);
   }
-  return new std::shared_ptr<arrow::Table>(std::move(table));
+  return new std::shared_ptr<arrow::Table>(table);
 
   OCAML_END_PROTECT_EXN
   return nullptr;
 }
 
-TablePtr *feather_read_table(char *filename, int *col_idxs, int ncols) {
+TablePtr *feather_read_table(const char *filename, int *col_idxs, int ncols) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   arrow::Status st;
@@ -634,12 +635,12 @@ TablePtr *feather_read_table(char *filename, int *col_idxs, int ncols) {
   else
     st = ok_exn(reader)->Read(&table);
   status_exn(st);
-  return new std::shared_ptr<arrow::Table>(std::move(table));
+  return new std::shared_ptr<arrow::Table>(table);
   OCAML_END_PROTECT_EXN
   return nullptr;
 }
 
-TablePtr *csv_read_table(char *filename) {
+TablePtr *csv_read_table(const char *filename) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   auto file = arrow::io::ReadableFile::Open(filename, arrow::default_memory_pool());
@@ -653,13 +654,13 @@ TablePtr *csv_read_table(char *filename) {
                                   arrow::csv::ConvertOptions::Defaults());
 
   auto table = ok_exn(reader)->Read();
-  return new std::shared_ptr<arrow::Table>(std::move(ok_exn(table)));
+  return new std::shared_ptr<arrow::Table>(ok_exn(table));
 
   OCAML_END_PROTECT_EXN
   return nullptr;
 }
 
-TablePtr *json_read_table(char *filename) {
+TablePtr *json_read_table(const char *filename) {
   OCAML_BEGIN_PROTECT_EXN_RELEASE_LOCK
 
   auto file = arrow::io::ReadableFile::Open(filename, arrow::default_memory_pool());
@@ -673,7 +674,7 @@ TablePtr *json_read_table(char *filename) {
   std::shared_ptr<arrow::json::TableReader> reader = ok_exn(reader_);
   auto table_ = reader->Read();
   std::shared_ptr<arrow::Table> table = ok_exn(table_);
-  return new std::shared_ptr<arrow::Table>(std::move(table));
+  return new std::shared_ptr<arrow::Table>(table);
 
   OCAML_END_PROTECT_EXN
   return nullptr;
@@ -685,7 +686,7 @@ TablePtr *table_concatenate(TablePtr **tables, int ntables) {
   std::vector<std::shared_ptr<arrow::Table>> vec;
   for (int i = 0; i < ntables; ++i) vec.push_back(**(tables+i));
   auto table = arrow::ConcatenateTables(vec);
-  return new std::shared_ptr<arrow::Table>(std::move(ok_exn(table)));
+  return new std::shared_ptr<arrow::Table>(ok_exn(table));
 
   OCAML_END_PROTECT_EXN
   return nullptr;
@@ -734,6 +735,104 @@ StringBuilderPtr *create_string_builder() {
   return new StringBuilderPtr(builder);
 }
 
+Int8BuilderPtr *create_int8_builder() {
+  auto builder = std::make_shared<arrow::Int8Builder>();
+  return new Int8BuilderPtr(builder);
+}
+
+Int16BuilderPtr *create_int16_builder() {
+  auto builder = std::make_shared<arrow::Int16Builder>();
+  return new Int16BuilderPtr(builder);
+}
+
+UInt8BuilderPtr *create_uint8_builder() {
+  auto builder = std::make_shared<arrow::UInt8Builder>();
+  return new UInt8BuilderPtr(builder);
+}
+
+UInt16BuilderPtr *create_uint16_builder() {
+  auto builder = std::make_shared<arrow::UInt16Builder>();
+  return new UInt16BuilderPtr(builder);
+}
+
+UInt32BuilderPtr *create_uint32_builder() {
+  auto builder = std::make_shared<arrow::UInt32Builder>();
+  return new UInt32BuilderPtr(builder);
+}
+
+UInt64BuilderPtr *create_uint64_builder() {
+  auto builder = std::make_shared<arrow::UInt64Builder>();
+  return new UInt64BuilderPtr(builder);
+}
+
+FloatBuilderPtr *create_float_builder() {
+  auto builder = std::make_shared<arrow::FloatBuilder>();
+  return new FloatBuilderPtr(builder);
+}
+
+BooleanBuilderPtr *create_boolean_builder() {
+  auto builder = std::make_shared<arrow::BooleanBuilder>();
+  return new BooleanBuilderPtr(builder);
+}
+
+Date32BuilderPtr *create_date32_builder() {
+  auto builder = std::make_shared<arrow::Date32Builder>();
+  return new Date32BuilderPtr(builder);
+}
+
+Date64BuilderPtr *create_date64_builder() {
+  auto builder = std::make_shared<arrow::Date64Builder>();
+  return new Date64BuilderPtr(builder);
+}
+
+Time32BuilderPtr *create_time32_builder(int unit) {
+  // unit: 0 = second, 1 = millisecond
+  auto time_type = unit == 0 ?
+    arrow::time32(arrow::TimeUnit::SECOND) :
+    arrow::time32(arrow::TimeUnit::MILLI);
+  auto builder = std::make_shared<arrow::Time32Builder>(time_type, arrow::default_memory_pool());
+  return new Time32BuilderPtr(builder);
+}
+
+Time64BuilderPtr *create_time64_builder(int unit) {
+  // unit: 0 = microsecond, 1 = nanosecond
+  auto time_type = unit == 0 ?
+    arrow::time64(arrow::TimeUnit::MICRO) :
+    arrow::time64(arrow::TimeUnit::NANO);
+  auto builder = std::make_shared<arrow::Time64Builder>(time_type, arrow::default_memory_pool());
+  return new Time64BuilderPtr(builder);
+}
+
+TimestampBuilderPtr *create_timestamp_builder(int unit, const char* timezone) {
+  // unit: 0 = second, 1 = millisecond, 2 = microsecond, 3 = nanosecond
+  arrow::TimeUnit::type time_unit;
+  switch(unit) {
+    case 0: time_unit = arrow::TimeUnit::SECOND; break;
+    case 1: time_unit = arrow::TimeUnit::MILLI; break;
+    case 2: time_unit = arrow::TimeUnit::MICRO; break;
+    case 3: time_unit = arrow::TimeUnit::NANO; break;
+    default: time_unit = arrow::TimeUnit::NANO;
+  }
+  auto timestamp_type = arrow::timestamp(time_unit, timezone ? timezone : "");
+  auto builder = std::make_shared<arrow::TimestampBuilder>(timestamp_type, arrow::default_memory_pool());
+  return new TimestampBuilderPtr(builder);
+}
+
+DurationBuilderPtr *create_duration_builder(int unit) {
+  // unit: 0 = second, 1 = millisecond, 2 = microsecond, 3 = nanosecond
+  arrow::TimeUnit::type time_unit;
+  switch(unit) {
+    case 0: time_unit = arrow::TimeUnit::SECOND; break;
+    case 1: time_unit = arrow::TimeUnit::MILLI; break;
+    case 2: time_unit = arrow::TimeUnit::MICRO; break;
+    case 3: time_unit = arrow::TimeUnit::NANO; break;
+    default: time_unit = arrow::TimeUnit::NANO;
+  }
+  auto duration_type = arrow::duration(time_unit);
+  auto builder = std::make_shared<arrow::DurationBuilder>(duration_type, arrow::default_memory_pool());
+  return new DurationBuilderPtr(builder);
+}
+
 void append_int32_builder(Int32BuilderPtr* ptr, int32_t v) {
   OCAML_BEGIN_PROTECT_EXN
 
@@ -762,7 +861,7 @@ void append_double_builder(DoubleBuilderPtr* ptr, double v) {
 }
 
 
-void append_string_builder(StringBuilderPtr* ptr, char* v) {
+void append_string_builder(StringBuilderPtr* ptr, const char* v) {
   OCAML_BEGIN_PROTECT_EXN
 
   arrow::Status st = (*ptr)->Append(v);
@@ -771,6 +870,131 @@ void append_string_builder(StringBuilderPtr* ptr, char* v) {
   OCAML_END_PROTECT_EXN
 }
 
+void append_int8_builder(Int8BuilderPtr* ptr, int8_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_int16_builder(Int16BuilderPtr* ptr, int16_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_uint8_builder(UInt8BuilderPtr* ptr, uint8_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_uint16_builder(UInt16BuilderPtr* ptr, uint16_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_uint32_builder(UInt32BuilderPtr* ptr, uint32_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_uint64_builder(UInt64BuilderPtr* ptr, uint64_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_float_builder(FloatBuilderPtr* ptr, float v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_boolean_builder(BooleanBuilderPtr* ptr, int v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v != 0);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_date32_builder(Date32BuilderPtr* ptr, int32_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_date64_builder(Date64BuilderPtr* ptr, int64_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_time32_builder(Time32BuilderPtr* ptr, int32_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_time64_builder(Time64BuilderPtr* ptr, int64_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_timestamp_builder(TimestampBuilderPtr* ptr, int64_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_duration_builder(DurationBuilderPtr* ptr, int64_t v) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->Append(v);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
 
 void append_null_int32_builder(Int32BuilderPtr* ptr, int n) {
   OCAML_BEGIN_PROTECT_EXN
@@ -810,6 +1034,131 @@ void append_null_string_builder(StringBuilderPtr* ptr, int n) {
   OCAML_END_PROTECT_EXN
 }
 
+void append_null_int8_builder(Int8BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_int16_builder(Int16BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_uint8_builder(UInt8BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_uint16_builder(UInt16BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_uint32_builder(UInt32BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_uint64_builder(UInt64BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_float_builder(FloatBuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_boolean_builder(BooleanBuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_date32_builder(Date32BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_date64_builder(Date64BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_time32_builder(Time32BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_time64_builder(Time64BuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_timestamp_builder(TimestampBuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
+
+void append_null_duration_builder(DurationBuilderPtr* ptr, int n) {
+  OCAML_BEGIN_PROTECT_EXN
+
+  arrow::Status st = (*ptr)->AppendNulls(n);
+  status_exn(st);
+
+  OCAML_END_PROTECT_EXN
+}
 
 void free_int32_builder(Int32BuilderPtr* ptr) {
   if (ptr != nullptr) delete ptr;
@@ -827,6 +1176,62 @@ void free_string_builder(StringBuilderPtr* ptr) {
   if (ptr != nullptr) delete ptr;
 }
 
+void free_int8_builder(Int8BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_int16_builder(Int16BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_uint8_builder(UInt8BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_uint16_builder(UInt16BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_uint32_builder(UInt32BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_uint64_builder(UInt64BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_float_builder(FloatBuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_boolean_builder(BooleanBuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_date32_builder(Date32BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_date64_builder(Date64BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_time32_builder(Time32BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_time64_builder(Time64BuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_timestamp_builder(TimestampBuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
+void free_duration_builder(DurationBuilderPtr* ptr) {
+  if (ptr != nullptr) delete ptr;
+}
+
 int64_t length_int32_builder(Int32BuilderPtr* ptr) {
   return (*ptr)->length();
 }
@@ -840,6 +1245,62 @@ int64_t length_string_builder(StringBuilderPtr* ptr) {
   return (*ptr)->length();
 }
 
+int64_t length_int8_builder(Int8BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_int16_builder(Int16BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_uint8_builder(UInt8BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_uint16_builder(UInt16BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_uint32_builder(UInt32BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_uint64_builder(UInt64BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_float_builder(FloatBuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_boolean_builder(BooleanBuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_date32_builder(Date32BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_date64_builder(Date64BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_time32_builder(Time32BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_time64_builder(Time64BuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_timestamp_builder(TimestampBuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
+int64_t length_duration_builder(DurationBuilderPtr* ptr) {
+  return (*ptr)->length();
+}
+
 int64_t null_count_int32_builder(Int32BuilderPtr* ptr) {
   return (*ptr)->null_count();
 }
@@ -850,6 +1311,62 @@ int64_t null_count_double_builder(DoubleBuilderPtr* ptr) {
   return (*ptr)->null_count();
 }
 int64_t null_count_string_builder(StringBuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_int8_builder(Int8BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_int16_builder(Int16BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_uint8_builder(UInt8BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_uint16_builder(UInt16BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_uint32_builder(UInt32BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_uint64_builder(UInt64BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_float_builder(FloatBuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_boolean_builder(BooleanBuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_date32_builder(Date32BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_date64_builder(Date64BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_time32_builder(Time32BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_time64_builder(Time64BuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_timestamp_builder(TimestampBuilderPtr* ptr) {
+  return (*ptr)->null_count();
+}
+
+int64_t null_count_duration_builder(DurationBuilderPtr* ptr) {
   return (*ptr)->null_count();
 }
 

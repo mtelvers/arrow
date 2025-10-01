@@ -72,6 +72,190 @@ module Int64 = struct
   let null_count t = null_count t |> Int64.to_int
 end
 
+module Int8 = struct
+  include C_wrapper.Int8Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.Int8Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.Int8Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Int16 = struct
+  include C_wrapper.Int16Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.Int16Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.Int16Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module UInt8 = struct
+  include C_wrapper.UInt8Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.UInt8Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.UInt8Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module UInt16 = struct
+  include C_wrapper.UInt16Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.UInt16Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.UInt16Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module UInt32 = struct
+  include C_wrapper.UInt32Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.UInt32Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.UInt32Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module UInt64 = struct
+  include C_wrapper.UInt64Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.UInt64Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.UInt64Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Float = struct
+  include C_wrapper.FloatBuilder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.FloatBuilder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.FloatBuilder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Boolean = struct
+  include C_wrapper.BooleanBuilder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.BooleanBuilder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.BooleanBuilder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Date32 = struct
+  include C_wrapper.Date32Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.Date32Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.Date32Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Date64 = struct
+  include C_wrapper.Date64Builder
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.Date64Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.Date64Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Time32 = struct
+  type t = C_wrapper.Time32Builder.t
+
+  let create () = C_wrapper.Time32Builder.create ()
+  let append = C_wrapper.Time32Builder.append
+  let append_null = C_wrapper.Time32Builder.append_null
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.Time32Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.Time32Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Time64 = struct
+  type t = C_wrapper.Time64Builder.t
+
+  let create () = C_wrapper.Time64Builder.create ()
+  let append = C_wrapper.Time64Builder.append
+  let append_null = C_wrapper.Time64Builder.append_null
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.Time64Builder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.Time64Builder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Timestamp = struct
+  type t = C_wrapper.TimestampBuilder.t
+
+  let create () = C_wrapper.TimestampBuilder.create ()
+  let append = C_wrapper.TimestampBuilder.append
+  let append_null = C_wrapper.TimestampBuilder.append_null
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.TimestampBuilder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.TimestampBuilder.null_count t |> Stdlib.Int64.to_int
+end
+
+module Duration = struct
+  type t = C_wrapper.DurationBuilder.t
+
+  let create () = C_wrapper.DurationBuilder.create ()
+  let append = C_wrapper.DurationBuilder.append
+  let append_null = C_wrapper.DurationBuilder.append_null
+
+  let append_opt t v =
+    match v with
+    | None -> append_null t ~n:1
+    | Some v -> append t v
+
+  let length t = C_wrapper.DurationBuilder.length t |> Stdlib.Int64.to_int
+  let null_count t = C_wrapper.DurationBuilder.null_count t |> Stdlib.Int64.to_int
+end
+
 let make_table = Wrapper.Builder.make_table
 
 (* Simple row-based construction - no PPX dependencies *)

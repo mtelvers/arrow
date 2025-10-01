@@ -127,6 +127,188 @@ let test_row_builder () =
   SimpleRowBuilder.reset builder;
   Alcotest.(check int) "Row builder length after reset" 0 (SimpleRowBuilder.length builder)
 
+let test_float_and_boolean_builders () =
+  (* Test Float builder *)
+  let float_builder = Builder.Float.create () in
+  Builder.Float.append float_builder 1.5;
+  Builder.Float.append float_builder 2.7;
+  Builder.Float.append_null float_builder;
+  Builder.Float.append float_builder 3.14;
+  Builder.Float.append_opt float_builder (Some 4.2);
+  Builder.Float.append_opt float_builder None;
+
+  Alcotest.(check int) "Float builder length" 6 (Builder.Float.length float_builder);
+  Alcotest.(check int) "Float builder null count" 2 (Builder.Float.null_count float_builder);
+
+  (* Test Boolean builder *)
+  let bool_builder = Builder.Boolean.create () in
+  Builder.Boolean.append bool_builder true;
+  Builder.Boolean.append bool_builder false;
+  Builder.Boolean.append_null bool_builder;
+  Builder.Boolean.append_opt bool_builder (Some true);
+  Builder.Boolean.append_opt bool_builder None;
+
+  Alcotest.(check int) "Boolean builder length" 5 (Builder.Boolean.length bool_builder);
+  Alcotest.(check int) "Boolean builder null count" 2 (Builder.Boolean.null_count bool_builder)
+
+let test_small_int_builders () =
+  (* Test Int8 builder *)
+  let int8_builder = Builder.Int8.create () in
+  Builder.Int8.append int8_builder 127;
+  Builder.Int8.append int8_builder (-128);
+  Builder.Int8.append_null int8_builder;
+  Builder.Int8.append_opt int8_builder (Some 0);
+  Builder.Int8.append_opt int8_builder None;
+
+  Alcotest.(check int) "Int8 builder length" 5 (Builder.Int8.length int8_builder);
+  Alcotest.(check int) "Int8 builder null count" 2 (Builder.Int8.null_count int8_builder);
+
+  (* Test Int16 builder *)
+  let int16_builder = Builder.Int16.create () in
+  Builder.Int16.append int16_builder 32767;
+  Builder.Int16.append int16_builder (-32768);
+  Builder.Int16.append_null int16_builder;
+  Builder.Int16.append_opt int16_builder (Some 1234);
+
+  Alcotest.(check int) "Int16 builder length" 4 (Builder.Int16.length int16_builder);
+  Alcotest.(check int) "Int16 builder null count" 1 (Builder.Int16.null_count int16_builder)
+
+let test_unsigned_int_builders () =
+  (* Test UInt8 builder *)
+  let uint8_builder = Builder.UInt8.create () in
+  Builder.UInt8.append uint8_builder 0;
+  Builder.UInt8.append uint8_builder 255;
+  Builder.UInt8.append_null uint8_builder;
+  Builder.UInt8.append_opt uint8_builder (Some 128);
+
+  Alcotest.(check int) "UInt8 builder length" 4 (Builder.UInt8.length uint8_builder);
+  Alcotest.(check int) "UInt8 builder null count" 1 (Builder.UInt8.null_count uint8_builder);
+
+  (* Test UInt16 builder *)
+  let uint16_builder = Builder.UInt16.create () in
+  Builder.UInt16.append uint16_builder 0;
+  Builder.UInt16.append uint16_builder 65535;
+  Builder.UInt16.append_null uint16_builder;
+  Builder.UInt16.append_opt uint16_builder (Some 32768);
+
+  Alcotest.(check int) "UInt16 builder length" 4 (Builder.UInt16.length uint16_builder);
+  Alcotest.(check int) "UInt16 builder null count" 1 (Builder.UInt16.null_count uint16_builder);
+
+  (* Test UInt32 builder *)
+  let uint32_builder = Builder.UInt32.create () in
+  Builder.UInt32.append uint32_builder 0l;
+  Builder.UInt32.append uint32_builder (-1l); (* max uint32 as signed int32 *)
+  Builder.UInt32.append_null uint32_builder;
+  Builder.UInt32.append_opt uint32_builder (Some 123456l);
+
+  Alcotest.(check int) "UInt32 builder length" 4 (Builder.UInt32.length uint32_builder);
+  Alcotest.(check int) "UInt32 builder null count" 1 (Builder.UInt32.null_count uint32_builder);
+
+  (* Test UInt64 builder *)
+  let uint64_builder = Builder.UInt64.create () in
+  Builder.UInt64.append uint64_builder 0L;
+  Builder.UInt64.append uint64_builder Int64.max_int;
+  Builder.UInt64.append_null uint64_builder;
+  Builder.UInt64.append_opt uint64_builder (Some 123456789L);
+
+  Alcotest.(check int) "UInt64 builder length" 4 (Builder.UInt64.length uint64_builder);
+  Alcotest.(check int) "UInt64 builder null count" 1 (Builder.UInt64.null_count uint64_builder)
+
+let test_builder_edge_cases () =
+  (* Test empty builders *)
+  let empty_float = Builder.Float.create () in
+  Alcotest.(check int) "Empty float builder length" 0 (Builder.Float.length empty_float);
+  Alcotest.(check int) "Empty float builder null count" 0 (Builder.Float.null_count empty_float);
+
+  let empty_bool = Builder.Boolean.create () in
+  Alcotest.(check int) "Empty boolean builder length" 0 (Builder.Boolean.length empty_bool);
+  Alcotest.(check int) "Empty boolean builder null count" 0 (Builder.Boolean.null_count empty_bool);
+
+  (* Test multiple nulls *)
+  let multi_null_int8 = Builder.Int8.create () in
+  Builder.Int8.append multi_null_int8 1;
+  Builder.Int8.append_null ~n:3 multi_null_int8;
+  Builder.Int8.append multi_null_int8 2;
+
+  Alcotest.(check int) "Multiple nulls length" 5 (Builder.Int8.length multi_null_int8);
+  Alcotest.(check int) "Multiple nulls count" 3 (Builder.Int8.null_count multi_null_int8);
+
+  (* Test all nulls *)
+  let all_nulls = Builder.UInt16.create () in
+  Builder.UInt16.append_null ~n:5 all_nulls;
+  Alcotest.(check int) "All nulls length" 5 (Builder.UInt16.length all_nulls);
+  Alcotest.(check int) "All nulls null count" 5 (Builder.UInt16.null_count all_nulls)
+
+let test_datetime_builders () =
+  (* Test Date32 builder - days since Unix epoch *)
+  let date32_builder = Builder.Date32.create () in
+  Builder.Date32.append date32_builder 0l;  (* 1970-01-01 *)
+  Builder.Date32.append date32_builder 18628l;  (* ~2021-01-01 *)
+  Builder.Date32.append_null date32_builder;
+  Builder.Date32.append_opt date32_builder (Some 19000l);
+
+  Alcotest.(check int) "Date32 builder length" 4 (Builder.Date32.length date32_builder);
+  Alcotest.(check int) "Date32 builder null count" 1 (Builder.Date32.null_count date32_builder);
+
+  (* Test Date64 builder - milliseconds since Unix epoch *)
+  let date64_builder = Builder.Date64.create () in
+  Builder.Date64.append date64_builder 0L;  (* 1970-01-01 *)
+  Builder.Date64.append date64_builder 1609459200000L;  (* 2021-01-01 *)
+  Builder.Date64.append_null date64_builder;
+  Builder.Date64.append_opt date64_builder None;
+
+  Alcotest.(check int) "Date64 builder length" 4 (Builder.Date64.length date64_builder);
+  Alcotest.(check int) "Date64 builder null count" 2 (Builder.Date64.null_count date64_builder);
+
+  (* Test Time32 builder - seconds or milliseconds since midnight *)
+  let time32_builder = Builder.Time32.create () in
+  Builder.Time32.append time32_builder 0l;  (* midnight *)
+  Builder.Time32.append time32_builder 3600l;  (* 1 hour *)
+  Builder.Time32.append time32_builder 43200l;  (* noon *)
+  Builder.Time32.append_null time32_builder;
+
+  Alcotest.(check int) "Time32 builder length" 4 (Builder.Time32.length time32_builder);
+  Alcotest.(check int) "Time32 builder null count" 1 (Builder.Time32.null_count time32_builder);
+
+  (* Test Time64 builder - microseconds or nanoseconds since midnight *)
+  let time64_builder = Builder.Time64.create () in
+  Builder.Time64.append time64_builder 0L;  (* midnight *)
+  Builder.Time64.append time64_builder 3600000000L;  (* 1 hour in microseconds *)
+  Builder.Time64.append_null time64_builder;
+  Builder.Time64.append_opt time64_builder (Some 43200000000L);  (* noon in microseconds *)
+
+  Alcotest.(check int) "Time64 builder length" 4 (Builder.Time64.length time64_builder);
+  Alcotest.(check int) "Time64 builder null count" 1 (Builder.Time64.null_count time64_builder);
+
+  (* Test Timestamp builder - nanoseconds since Unix epoch *)
+  let timestamp_builder = Builder.Timestamp.create () in
+  Builder.Timestamp.append timestamp_builder 0L;
+  Builder.Timestamp.append timestamp_builder 1609459200000000000L;  (* 2021-01-01 in nanoseconds *)
+  Builder.Timestamp.append_null timestamp_builder;
+  Builder.Timestamp.append_opt timestamp_builder (Some 1640995200000000000L);  (* 2022-01-01 *)
+
+  Alcotest.(check int) "Timestamp builder length" 4 (Builder.Timestamp.length timestamp_builder);
+  Alcotest.(check int) "Timestamp builder null count" 1 (Builder.Timestamp.null_count timestamp_builder);
+
+  (* Test Duration builder - time duration *)
+  let duration_builder = Builder.Duration.create () in
+  Builder.Duration.append duration_builder 1000000000L;  (* 1 second in nanoseconds *)
+  Builder.Duration.append duration_builder 60000000000L;  (* 1 minute in nanoseconds *)
+  Builder.Duration.append_null duration_builder;
+  Builder.Duration.append_opt duration_builder (Some 3600000000000L);  (* 1 hour *)
+
+  Alcotest.(check int) "Duration builder length" 4 (Builder.Duration.length duration_builder);
+  Alcotest.(check int) "Duration builder null count" 1 (Builder.Duration.null_count duration_builder);
+
+  (* Test multiple nulls *)
+  let date_null_test = Builder.Date32.create () in
+  Builder.Date32.append date_null_test 100l;
+  Builder.Date32.append_null ~n:3 date_null_test;
+  Builder.Date32.append date_null_test 200l;
+
+  Alcotest.(check int) "Date32 multiple nulls length" 5 (Builder.Date32.length date_null_test);
+  Alcotest.(check int) "Date32 multiple nulls count" 3 (Builder.Date32.null_count date_null_test)
+
 let test_comprehensive_builders () =
   (* Comprehensive test of multiple builder types working together *)
   let col1 = Wrapper.StringBuilder.create () in
@@ -174,6 +356,11 @@ let () =
       test_case "Double builder" `Quick test_double_builder;
       test_case "String builder" `Quick test_string_builder;
       test_case "Int builders" `Quick test_int_builders;
+      test_case "Float and Boolean builders" `Quick test_float_and_boolean_builders;
+      test_case "Small int builders (Int8/Int16)" `Quick test_small_int_builders;
+      test_case "Unsigned int builders" `Quick test_unsigned_int_builders;
+      test_case "Datetime builders" `Quick test_datetime_builders;
+      test_case "Builder edge cases" `Quick test_builder_edge_cases;
       test_case "Row-based builder" `Quick test_row_based_builder;
       test_case "Row builder module" `Quick test_row_builder;
       test_case "Comprehensive builders test" `Quick test_comprehensive_builders;

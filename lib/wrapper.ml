@@ -15,4 +15,4 @@ module Feather_reader = struct
 end
 
 
-let keep_alive = ref []
+let _keep_alive = ref []
