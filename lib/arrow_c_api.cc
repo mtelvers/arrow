@@ -282,6 +282,14 @@ struct ArrowArray *table_chunked_column_(TablePtr *table, const char *column_nam
     expected_type = arrow::Type::DURATION;
     expected_type_str = "duration";
   }
+  else if (dt == 10) {
+    expected_type = arrow::Type::LARGE_STRING;
+    expected_type_str = "large_utf8";
+  }
+  else if (dt == 11) {
+    expected_type = arrow::Type::LARGE_BINARY;
+    expected_type_str = "large_binary";
+  }
   else {
     throw std::invalid_argument(std::string("unknown datatype ") + std::to_string(dt));
   }
@@ -304,11 +312,6 @@ struct ArrowArray *table_chunked_column_(TablePtr *table, const char *column_nam
     auto chunk = array->chunk(i);
     auto chunk_type = chunk->type()->id();
     bool type_match = (chunk_type == expected_type) || (chunk_type == arrow::Type::NA);
-
-    // Special case: accept LARGE_STRING when expecting STRING (utf8)
-    if (expected_type == arrow::Type::STRING && chunk_type == arrow::Type::LARGE_STRING) {
-      type_match = true;
-    }
 
     if (!type_match) {
       throw std::invalid_argument(

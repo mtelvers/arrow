@@ -443,6 +443,41 @@ module Writer = struct
     ) array;
     string_ba_opt ~format:"u" ~offsets ~data ~valid ~name
 
+  let large_utf8 array ~name =
+    let total_length = Array.fold_left (fun acc s -> acc + String.length s) 0 array in
+    let offsets = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length array + 1) in
+    let data = Bigarray.Array1.create Bigarray.char Bigarray.c_layout total_length in
+    let current_offset = ref 0 in
+    offsets.{0} <- 0L;
+    Array.iteri (fun i s ->
+      let len = String.length s in
+      String.iteri (fun j c -> data.{!current_offset + j} <- c) s;
+      current_offset := !current_offset + len;
+      offsets.{i + 1} <- Int64.of_int !current_offset
+    ) array;
+    string_ba ~format:"U" ~offsets ~data ~name
+
+  let large_utf8_opt array ~name =
+    let total_length = Array.fold_left (fun acc -> function
+      | Some s -> acc + String.length s | None -> acc) 0 array in
+    let offsets = Bigarray.Array1.create Bigarray.int64 Bigarray.c_layout (Array.length array + 1) in
+    let data = Bigarray.Array1.create Bigarray.char Bigarray.c_layout total_length in
+    let valid = Valid.create (Array.length array) in
+    let current_offset = ref 0 in
+    offsets.{0} <- 0L;
+    Array.iteri (fun i -> function
+      | Some s ->
+        let len = String.length s in
+        String.iteri (fun j c -> data.{!current_offset + j} <- c) s;
+        current_offset := !current_offset + len;
+        offsets.{i + 1} <- Int64.of_int !current_offset;
+        Valid.set_valid valid i
+      | None ->
+        offsets.{i + 1} <- Int64.of_int !current_offset;
+        Valid.set_invalid valid i
+    ) array;
+    string_ba_opt ~format:"U" ~offsets ~data ~valid ~name
+
   (* Bigarray convenience functions *)
   let int64_ba array ~name = fixed_ba ~format:"l" array ~name
   let int64_ba_opt array valid ~name = fixed_ba_opt ~format:"l" array valid ~name
@@ -903,12 +938,14 @@ module Column = struct
   type column = [`Name of string | `Index of int]
   
   module Datatype = struct
-    type t = 
+    type t =
       | Int64 | Float64 | Utf8 | Date32 | Timestamp | Bool | Float32 | Int32 | Time64 | Duration
-    
+      | LargeUtf8 | LargeBinary
+
     let to_int = function
       | Int64 -> 0 | Float64 -> 1 | Utf8 -> 2 | Date32 -> 3 | Timestamp -> 4
       | Bool -> 5 | Float32 -> 6 | Int32 -> 7 | Time64 -> 8 | Duration -> 9
+      | LargeUtf8 -> 10 | LargeBinary -> 11
   end
 
   let with_column table dt ~column ~f =
@@ -1112,6 +1149,91 @@ module Column = struct
                   dst.(dst_offset + idx) <- str
                 done;
                 dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_large_utf8 table ~column =
+    with_column table LargeUtf8 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then
+          [||]
+        else (
+          let dst = Array.make num_rows "" in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:true ~fail_on_offset:false in
+                (* Arrow Large UTF8 format:
+                   - Buffer 0: validity bitmap (optional)
+                   - Buffer 1: offsets array (int64)
+                   - Buffer 2: data array (char)
+                *)
+                let offsets = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                let data =
+                  match chunk.buffers with
+                  | [ _; _; data ] -> from_voidp char data
+                  | _ -> failwith "expected 3 buffers for large_utf8"
+                in
+                for idx = 0 to chunk.length - 1 do
+                  let str_offset = !@(offsets +@ idx) |> Int64.to_int in
+                  let next_str_offset = !@(offsets +@ (idx + 1)) |> Int64.to_int in
+                  let str =
+                    string_from_ptr (data +@ str_offset)
+                      ~length:(next_str_offset - str_offset)
+                  in
+                  dst.(dst_offset + idx) <- str
+                done;
+                dst_offset + chunk.length) 0 chunks
+          in
+          dst
+        ))
+
+  let read_large_utf8_opt table ~column =
+    with_column table LargeUtf8 ~column ~f:(fun chunks ->
+        let num_rows = num_rows chunks in
+        if num_rows = 0 then [||]
+        else (
+          let dst = Array.make num_rows None in
+          let _num_rows =
+            List.fold_left (fun dst_offset chunk ->
+                let chunk = Chunk.create chunk ~fail_on_null:false ~fail_on_offset:false in
+                if chunk.null_count = chunk.length then
+                  dst_offset + chunk.length
+                else (
+                  let offsets = Chunk.primitive_data_ptr chunk ~ctype:int64_t in
+                  let valid, data =
+                    match chunk.buffers with
+                    | [ valid; _; data ] ->
+                        let valid =
+                          if is_null valid then None
+                          else Some (from_voidp uint8_t valid)
+                        in
+                        valid, from_voidp char data
+                    | _ -> failwith "expected 3 buffers for large_utf8"
+                  in
+                  for idx = 0 to chunk.length - 1 do
+                    let is_valid =
+                      if chunk.null_count = 0 then true
+                      else (
+                        match valid with
+                        | None -> true
+                        | Some valid ->
+                            let b = !@(valid +@ (idx / 8)) |> Unsigned.UInt8.to_int in
+                            b land (1 lsl (idx land 0b111)) <> 0
+                      )
+                    in
+                    if is_valid then (
+                      let str_offset = !@(offsets +@ idx) |> Int64.to_int in
+                      let next_str_offset = !@(offsets +@ (idx + 1)) |> Int64.to_int in
+                      let str =
+                        string_from_ptr (data +@ str_offset)
+                          ~length:(next_str_offset - str_offset)
+                      in
+                      dst.(dst_offset + idx) <- Some str
+                    )
+                  done;
+                  dst_offset + chunk.length
+                )) 0 chunks
           in
           dst
         ))
@@ -1533,37 +1655,47 @@ module Column = struct
       (* Try to determine column type by attempting reads *)
       let column = `Index column_index in
 
-      (* First try reading as String *)
+      (* First try reading as String (utf8) *)
       try
         let str_array = read_utf8 table ~column in
         String str_array
       with _ ->
-        (* Try reading as Int64 *)
+        (* Try reading as Large String (large_utf8) *)
         try
-          let int64_ba = read_i64_ba table ~column in
-          Int64 int64_ba
+          let str_array = read_large_utf8 table ~column in
+          String str_array
         with _ ->
-          (* Try reading as Double *)
+          (* Try reading as Int64 *)
           try
-            let double_ba = read_f64_ba table ~column in
-            Double double_ba
+            let int64_ba = read_i64_ba table ~column in
+            Int64 int64_ba
           with _ ->
-            (* Try reading as optional String *)
+            (* Try reading as Double *)
             try
-              let str_opt_array = read_utf8_opt table ~column in
-              String_option str_opt_array
+              let double_ba = read_f64_ba table ~column in
+              Double double_ba
             with _ ->
-              (* Try reading as optional Int64 *)
+              (* Try reading as optional String (utf8) *)
               try
-                let int64_ba, valid = read_i64_ba_opt table ~column in
-                Int64_option (int64_ba, Valid.bigarray valid)
+                let str_opt_array = read_utf8_opt table ~column in
+                String_option str_opt_array
               with _ ->
-                (* Try reading as optional Double *)
+                (* Try reading as optional Large String (large_utf8) *)
                 try
-                  let double_ba, valid = read_f64_ba_opt table ~column in
-                  Double_option (double_ba, Valid.bigarray valid)
+                  let str_opt_array = read_large_utf8_opt table ~column in
+                  String_option str_opt_array
                 with _ ->
-                  Unsupported_type
+                  (* Try reading as optional Int64 *)
+                  try
+                    let int64_ba, valid = read_i64_ba_opt table ~column in
+                    Int64_option (int64_ba, Valid.bigarray valid)
+                  with _ ->
+                    (* Try reading as optional Double *)
+                    try
+                      let double_ba, valid = read_f64_ba_opt table ~column in
+                      Double_option (double_ba, Valid.bigarray valid)
+                    with _ ->
+                      Unsupported_type
     with _ ->
       Unsupported_type
 end

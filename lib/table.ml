@@ -4,6 +4,7 @@ type _ col_type =
   | Int : int col_type
   | Float : float col_type
   | Utf8 : string col_type
+  | LargeUtf8 : string col_type
   | Date : Datetime.Date.t col_type
   | Time_ns : Datetime.Time_ns.t col_type
   | Span_ns : Datetime.Time_ns.Span.t col_type
@@ -38,6 +39,7 @@ let col (type a) (data : a array) (col_type : a col_type) ~name =
   | Int -> Wrapper.Writer.int data ~name
   | Float -> Wrapper.Writer.float data ~name
   | Utf8 -> Wrapper.Writer.utf8 data ~name
+  | LargeUtf8 -> Wrapper.Writer.large_utf8 data ~name
   | Date -> Wrapper.Writer.date data ~name
   | Time_ns -> Wrapper.Writer.time_ns data ~name
   | Span_ns -> Wrapper.Writer.span_ns data ~name
@@ -49,6 +51,7 @@ let col_opt (type a) (data : a option array) (col_type : a col_type) ~name =
   | Int -> Wrapper.Writer.int_opt data ~name
   | Float -> Wrapper.Writer.float_opt data ~name
   | Utf8 -> Wrapper.Writer.utf8_opt data ~name
+  | LargeUtf8 -> Wrapper.Writer.large_utf8_opt data ~name
   | Date -> Wrapper.Writer.date_opt data ~name
   | Time_ns -> Wrapper.Writer.time_ns_opt data ~name
   | Span_ns -> Wrapper.Writer.span_ns_opt data ~name
@@ -65,6 +68,7 @@ let read (type a) table ~column (col_type : a col_type) : a array =
   | Int -> Wrapper.Column.read_int table ~column
   | Float -> Wrapper.Column.read_float table ~column
   | Utf8 -> Wrapper.Column.read_utf8 table ~column
+  | LargeUtf8 -> Wrapper.Column.read_large_utf8 table ~column
   | Date -> Wrapper.Column.read_date table ~column
   | Time_ns -> Wrapper.Column.read_time_ns table ~column
   | Span_ns -> Wrapper.Column.read_span_ns table ~column
@@ -78,6 +82,7 @@ let read_opt (type a) table ~column (col_type : a col_type) : a option array =
   | Int -> Wrapper.Column.read_int_opt table ~column
   | Float -> Wrapper.Column.read_float_opt table ~column
   | Utf8 -> Wrapper.Column.read_utf8_opt table ~column
+  | LargeUtf8 -> Wrapper.Column.read_large_utf8_opt table ~column
   | Date -> Wrapper.Column.read_date_opt table ~column
   | Time_ns -> Wrapper.Column.read_time_ns_opt table ~column
   | Span_ns -> Wrapper.Column.read_span_ns_opt table ~column

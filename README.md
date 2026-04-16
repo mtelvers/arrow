@@ -2,7 +2,7 @@ This project is entirely derived from
 [LaurentMazare/ocaml-arrow](https://github.com/LaurentMazare/ocaml-arrow).
 
 This is a reimplementation using the OCaml Standard Library and updated to
-[Apache Arrow](https://arrow.apache.org/) version 21 and C++ 17.
+[Apache Arrow](https://arrow.apache.org/) version 23 and C++ 20.
 
 Some of the `ocaml-arrow` features around PPX have not yet been ported.
 
@@ -51,7 +51,7 @@ cd arrow
 
 Checkout latest stable release (optional, or use main branch)
 ```sh
-git checkout apache-arrow-21.0.0
+git checkout apache-arrow-23.0.1
 ```
 
 Create build directory

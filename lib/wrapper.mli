@@ -224,6 +224,9 @@ module Column : sig
   val read_utf8 : Table.t -> column:column -> string array
   (** Read UTF-8 string column as string array *)
 
+  val read_large_utf8 : Table.t -> column:column -> string array
+  (** Read Large UTF-8 string column (int64 offsets) as string array *)
+
   val read_date : Table.t -> column:column -> Datetime.Date.t array
   (** Read date column as Ptime.date array *)
 
@@ -275,6 +278,9 @@ module Column : sig
 
   val read_utf8_opt : Table.t -> column:column -> string option array
   (** Read nullable UTF-8 string column as option array *)
+
+  val read_large_utf8_opt : Table.t -> column:column -> string option array
+  (** Read nullable Large UTF-8 string column (int64 offsets) as option array *)
 
   val read_date_opt : Table.t -> column:column -> Datetime.Date.t option array
   (** Read nullable date column as option array *)
@@ -411,6 +417,8 @@ module Writer : sig
   val float_opt : float option array -> name:string -> col
   val utf8 : string array -> name:string -> col
   val utf8_opt : string option array -> name:string -> col
+  val large_utf8 : string array -> name:string -> col
+  val large_utf8_opt : string option array -> name:string -> col
   val date : Datetime.Date.t array -> name:string -> col
   val date_opt : Datetime.Date.t option array -> name:string -> col
 

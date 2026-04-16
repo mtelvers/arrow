@@ -204,7 +204,10 @@ type _ col_type =
   | Float : float col_type
   (** Float64 column *)
   | Utf8 : string col_type
-  (** UTF-8 string column *)
+  (** UTF-8 string column (int32 offsets, max 2GB total string data) *)
+  | LargeUtf8 : string col_type
+  (** Large UTF-8 string column (int64 offsets, no size limit).
+      Parquet files with string columns often use this type. *)
   | Date : Datetime.Date.t col_type
   (** Date column (days since Unix epoch) *)
   | Time_ns : Datetime.Time_ns.t col_type
