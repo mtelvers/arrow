@@ -26,4 +26,5 @@
   ctypes-foreign
   dune-configurator
   ptime
+  conf-arrow
   (alcotest :with-test)))
